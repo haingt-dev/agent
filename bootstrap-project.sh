@@ -180,41 +180,12 @@ fi
 mkdir -p "$CLAUDE_DIR/skills"
 echo "  ✓ skills/ directory"
 
-# Claude hooks (SessionStart + PreToolUse safety)
+# Claude settings (hooks handled by haint-core plugin)
 if [ ! -f "$CLAUDE_DIR/settings.json" ]; then
-    cat > "$CLAUDE_DIR/settings.json" << 'HOOKEOF'
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo \"Branch: $(git branch --show-current 2>/dev/null || echo 'n/a')\" && echo \"Recent commits:\" && git log --oneline -5 2>/dev/null && echo '' && echo '--- Memory Bank ---' && for f in .memory-bank/brief.md .memory-bank/context.md .memory-bank/tech.md; do [ -f \"$f\" ] && echo \"=== $(basename $f) ===\" && head -50 \"$f\" && echo ''; done && echo '--- End Memory Bank ---' || true",
-            "timeout": 15
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '(rm -rf /|git push.*--force|git reset --hard|git clean -fd)'; then echo 'BLOCKED: Dangerous command. Ask user for confirmation.' >&2; exit 2; fi && if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE 'git (add|commit)'; then SENSITIVE=$(git diff --cached --name-only 2>/dev/null | grep -iE '\\.(env|key|pem)$|credentials|secrets' || true); if [ -n \"$SENSITIVE\" ]; then echo \"BLOCKED: Sensitive files staged: $SENSITIVE\" >&2; exit 2; fi; fi",
-            "timeout": 10
-          }
-        ]
-      }
-    ]
-  }
-}
-HOOKEOF
-    echo "  ✓ Claude hooks (SessionStart, PreToolUse)"
+    echo '{}' > "$CLAUDE_DIR/settings.json"
+    echo "  ✓ settings.json (hooks via haint-core plugin)"
 else
-    echo "  ⏭ Claude hooks (settings.json exists)"
+    echo "  ⏭ settings.json (exists)"
 fi
 
 # --- Kilo Code ---
@@ -244,7 +215,7 @@ echo "   │   ├── architecture.md"
 echo "   │   └── tech.md"
 echo "   ├── .claude/               (Claude Code)"
 echo "   │   ├── CLAUDE.md"
-echo "   │   ├── settings.json      (hooks: SessionStart, PreToolUse)"
+echo "   │   ├── settings.json      (project-specific hooks only)"
 echo "   │   ├── rules/"
 echo "   │   └── skills/            (add SKILL.md per workflow)"
 echo "   ├── .kilocode/             (Kilo Code)"
@@ -255,5 +226,7 @@ echo ""
 echo "📝 Next steps:"
 echo "   1. Fill in .memory-bank/ files with project details"
 echo "   2. Add skills in .claude/skills/<name>/SKILL.md for project workflows"
-echo "   3. Run: cd $PROJECT_PATH && claude"
+echo "   3. Install core plugin: claude plugin install haint-core@agent --scope user"
+echo "   4. (Godot projects) Install: claude plugin install godot-dev@agent --scope project"
+echo "   5. Run: cd $PROJECT_PATH && claude"
 echo ""

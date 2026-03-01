@@ -1,0 +1,6 @@
+{
+  "name": "haint-core",
+  "description": "Core hooks: Memory Bank auto-load, git safety, commit protocol",
+  "version": "1.0.0",
+  "author": { "name": "Hải" }
+}

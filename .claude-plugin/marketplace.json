@@ -1,0 +1,20 @@
+{
+  "name": "haint-marketplace",
+  "owner": {
+    "name": "Hải"
+  },
+  "plugins": [
+    {
+      "name": "haint-core",
+      "source": "./plugins/haint-core",
+      "description": "Core hooks: Memory Bank auto-load, git safety",
+      "version": "1.0.0"
+    },
+    {
+      "name": "godot-dev",
+      "source": "./plugins/godot-dev",
+      "description": "Godot 4.x GDScript patterns and debugging",
+      "version": "1.0.0"
+    }
+  ]
+}
