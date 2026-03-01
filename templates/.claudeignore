@@ -1,0 +1,37 @@
+# Build artifacts
+build/
+dist/
+out/
+*.min.js
+*.min.css
+
+# Dependencies
+node_modules/
+.godot/
+addons/
+
+# Large generated files
+*.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Binary/media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.woff
+*.woff2
+*.ttf
+*.mp3
+*.wav
+*.ogg
+*.mp4
+
+# IDE
+.idea/
+.vscode/
+*.swp

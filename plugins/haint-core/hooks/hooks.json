@@ -15,6 +15,14 @@
         "command": "${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-safety.sh",
         "timeout": 10
       }]
+    }],
+    "Notification": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/notify.sh",
+        "timeout": 5
+      }]
     }]
   }
 }
