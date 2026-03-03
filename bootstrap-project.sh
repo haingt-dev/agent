@@ -7,7 +7,8 @@
 #   AGENTS.md            — Shared project instructions (all agents)
 #   .claude/             — Claude Code config + rules + hooks
 #   .kilocode/           — Kilo Code config + rules
-#   .agents/             — Antigravity config + rules
+#   .antigravity/        — Antigravity workspace rules
+#   .agent/skills/       — Antigravity workspace skills
 
 set -e
 
@@ -45,9 +46,35 @@ if [ -d "$TEMPLATES/memory-bank" ]; then
         fi
     done
 else
-    for file in brief product context architecture tech; do
+    for file in brief product context task architecture tech; do
         [ ! -f "$MEMORY_BANK/$file.md" ] && echo "# ${file^}" > "$MEMORY_BANK/$file.md" && echo "  ✓ $file.md"
     done
+fi
+
+# Stories subdirectory (not auto-loaded by session-start)
+mkdir -p "$MEMORY_BANK/stories"
+if [ -f "$TEMPLATES/memory-bank/stories/index.md" ] && [ ! -f "$MEMORY_BANK/stories/index.md" ]; then
+    cp "$TEMPLATES/memory-bank/stories/index.md" "$MEMORY_BANK/stories/"
+    echo "  ✓ stories/index.md"
+else
+    echo "  ⏭ stories/index.md (exists)"
+fi
+
+# Origin story (first story for every project)
+if ! ls "$MEMORY_BANK/stories/"*-origin.md &>/dev/null; then
+    TODAY=$(date +%Y-%m-%d)
+    ORIGIN_FILE="$MEMORY_BANK/stories/${TODAY}-origin.md"
+    if [ -f "$TEMPLATES/memory-bank/stories/origin.md" ]; then
+        sed "s/PROJECT_NAME/$PROJECT_NAME/g; s/YYYY-MM-DD/$TODAY/g" \
+            "$TEMPLATES/memory-bank/stories/origin.md" > "$ORIGIN_FILE"
+    fi
+    # Append to index
+    if [ -f "$MEMORY_BANK/stories/index.md" ]; then
+        echo "| $TODAY | Origin: $PROJECT_NAME | origin |" >> "$MEMORY_BANK/stories/index.md"
+    fi
+    echo "  ✓ stories/${TODAY}-origin.md"
+else
+    echo "  ⏭ stories/origin (exists)"
 fi
 
 # ============================================
@@ -60,7 +87,7 @@ if [ ! -f "$AGENTS_MD" ]; then
     cat > "$AGENTS_MD" << EOF
 # $PROJECT_NAME — Project Context
 
-> Soul & identity: see global ~/.claude/CLAUDE.md
+> Soul & identity: see ~/.claude/CLAUDE.md or ~/.gemini/GEMINI.md
 
 ## Project Values
 - **Minimal impact** — Make the smallest changes necessary. Don't over-engineer
@@ -71,14 +98,16 @@ if [ ! -f "$AGENTS_MD" ]; then
 <!-- TODO: Add project-specific boundaries -->
 
 ## Memory Bank
-Auto-loaded at session start (brief, context, tech). Full files in \`.memory-bank/\`:
+Auto-loaded at session start (brief, context, task, tech). Full files in \`.memory-bank/\`:
 - \`brief.md\` — Project goals and scope
 - \`product.md\` — Product context and constraints
-- \`context.md\` — Current focus and recent changes
+- \`context.md\` — Recent changes and carry-forward notes
+- \`task.md\` — Active tasks and sprint focus
 - \`architecture.md\` — System architecture
 - \`tech.md\` — Tech stack and tooling
+- \`stories/\` — Dev stories for devlogs (not auto-loaded, use \`/story\` to capture)
 
-After major tasks or architectural changes, update relevant Memory Bank files (use \`/update-mb\`).
+After major tasks or architectural changes, update relevant Memory Bank files.
 
 ## Security
 **CRITICAL**: NEVER commit, push, or expose secrets, API keys, tokens, or credentials to version control.
@@ -96,44 +125,8 @@ else
 fi
 
 # ============================================
-# 3. AGENT RULES (per-agent)
+# 3. AGENT CONFIG (per-agent)
 # ============================================
-
-# Shared commit-protocol rule content
-COMMIT_PROTOCOL='# Commit Message Format
-`<type>(<scope>): <description>`
-
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, white-space |
-| `refactor` | Code change (no fix/feat) |
-| `perf` | Performance improvement |
-| `test` | Adding/fixing tests |
-| `chore` | Build/tools maintenance |'
-
-# Helper function to create rules for an agent
-create_agent_rules() {
-    local agent_dir="$1"
-    local agent_name="$2"
-    local rules_dir="$agent_dir/rules"
-
-    mkdir -p "$rules_dir"
-
-    if [ ! -f "$rules_dir/commit-protocol.md" ]; then
-        echo "$COMMIT_PROTOCOL" > "$rules_dir/commit-protocol.md"
-    fi
-
-    # Copy soul.md from templates if available
-    local soul_src="$TEMPLATES/rules/soul.md"
-    if [ -f "$soul_src" ] && [ ! -f "$rules_dir/soul.md" ]; then
-        cp "$soul_src" "$rules_dir/soul.md"
-    fi
-
-    echo "  ✓ $agent_name rules (commit-protocol.md, soul.md)"
-}
 
 # --- Claude ---
 CLAUDE_DIR="$PROJECT_PATH/.claude"
@@ -152,30 +145,6 @@ else
     echo "  ⏭ CLAUDE.md (exists)"
 fi
 
-# Claude commit-protocol with frontmatter
-if [ ! -f "$CLAUDE_DIR/rules/commit-protocol.md" ]; then
-    cat > "$CLAUDE_DIR/rules/commit-protocol.md" << 'EOF'
----
-description: Commit message format and conventions
----
-
-# Commit Message Format
-`<type>(<scope>): <description>`
-
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, white-space |
-| `refactor` | Code change (no fix/feat) |
-| `perf` | Performance improvement |
-| `test` | Adding/fixing tests |
-| `chore` | Build/tools maintenance |
-EOF
-    echo "  ✓ Claude rules (commit-protocol.md)"
-fi
-
 # Claude skills directory
 mkdir -p "$CLAUDE_DIR/skills"
 echo "  ✓ skills/ directory"
@@ -191,12 +160,50 @@ fi
 # --- Kilo Code ---
 echo ""
 echo "🔧 Creating .kilocode/..."
-create_agent_rules "$PROJECT_PATH/.kilocode" "Kilo Code"
+mkdir -p "$PROJECT_PATH/.kilocode/rules"
+echo "  ✓ Kilo Code rules directory"
 
 # --- Antigravity ---
 echo ""
-echo "🌀 Creating .agents/..."
-create_agent_rules "$PROJECT_PATH/.agents" "Antigravity"
+echo "🌀 Creating .antigravity/..."
+mkdir -p "$PROJECT_PATH/.antigravity"
+mkdir -p "$PROJECT_PATH/.agent/skills"
+
+if [ ! -f "$PROJECT_PATH/.antigravity/rules.md" ]; then
+    cat > "$PROJECT_PATH/.antigravity/rules.md" << 'RULES_EOF'
+# Workspace Rules
+
+> Full project context: see AGENTS.md
+> Soul & identity: see ~/.gemini/GEMINI.md
+
+## Commit Protocol
+`<type>(<scope>): <description>`
+
+| Type | Description |
+|------|-------------|
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `docs` | Documentation only |
+| `style` | Formatting, white-space |
+| `refactor` | Code change (no fix/feat) |
+| `perf` | Performance improvement |
+| `test` | Adding/fixing tests |
+| `chore` | Build/tools maintenance |
+
+## Context Loading
+- On session start, read AGENTS.md for project context.
+- Read `.memory-bank/brief.md`, `.memory-bank/context.md`, and `.memory-bank/task.md` for current state.
+
+## Safety Guards
+- NEVER run `rm -rf /`, `git reset --hard`, `git push --force` without explicit confirmation.
+- NEVER commit files matching: `.env*`, `credentials.*`, `secrets.*`, `*.key`, `*.pem`.
+- Before committing, verify with `git diff --cached` that no secrets are staged.
+RULES_EOF
+    echo "  ✓ .antigravity/rules.md"
+else
+    echo "  ⏭ .antigravity/rules.md (exists)"
+fi
+echo "  ✓ .agent/skills/ directory"
 
 # ============================================
 # 4. SUMMARY
@@ -211,17 +218,19 @@ echo "   ├── .memory-bank/          (shared — project knowledge)"
 echo "   │   ├── brief.md"
 echo "   │   ├── product.md"
 echo "   │   ├── context.md"
+echo "   │   ├── task.md"
 echo "   │   ├── architecture.md"
-echo "   │   └── tech.md"
+echo "   │   ├── tech.md"
+echo "   │   └── stories/          (dev stories — not auto-loaded)"
 echo "   ├── .claude/               (Claude Code)"
 echo "   │   ├── CLAUDE.md"
 echo "   │   ├── settings.json      (project-specific hooks only)"
-echo "   │   ├── rules/"
 echo "   │   └── skills/            (add SKILL.md per workflow)"
 echo "   ├── .kilocode/             (Kilo Code)"
 echo "   │   └── rules/"
-echo "   └── .agents/               (Antigravity)"
-echo "       └── rules/"
+echo "   ├── .antigravity/          (Antigravity)"
+echo "   │   └── rules.md"
+echo "   └── .agent/skills/         (Antigravity skills)"
 echo ""
 echo "📝 Next steps:"
 echo "   1. Fill in .memory-bank/ files with project details"

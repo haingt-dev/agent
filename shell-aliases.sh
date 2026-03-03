@@ -33,6 +33,15 @@ mbk() {
     fi
 }
 
+# Quick edit task.md
+mbt() {
+    if [ -f ".memory-bank/task.md" ]; then
+        $EDITOR .memory-bank/task.md
+    else
+        echo "❌ No task.md found. Run 'mbk' to see all Memory Bank files"
+    fi
+}
+
 # Quick edit context.md (most frequently updated)
 mbc() {
     if [ -f ".memory-bank/context.md" ]; then
@@ -99,16 +108,6 @@ cdc() {
 }
 
 # ============================================
-# RULES & SYNC
-# ============================================
-
-# Edit rule templates (source of truth for shared rules)
-alias ag-rules='$EDITOR ~/.agent_global/templates/rules/'
-
-# Sync shared rules to all projects
-alias ag-sync-rules='~/.agent_global/ag-sync-rules.sh'
-
-# ============================================
 # MAINTENANCE
 # ============================================
 
@@ -123,7 +122,7 @@ ag-status() {
         [ -d "$project/.memory-bank" ] && echo "  ✓ .memory-bank/" || echo "  ✗ .memory-bank/"
         [ -f "$project/.claude/CLAUDE.md" ] && echo "  ✓ .claude/" || echo "  ✗ .claude/"
         [ -d "$project/.kilocode/rules" ] && echo "  ✓ .kilocode/" || echo "  ✗ .kilocode/"
-        [ -d "$project/.agents/rules" ] && echo "  ✓ .agents/" || echo "  ✗ .agents/"
+        [ -f "$project/.antigravity/rules.md" ] && echo "  ✓ .antigravity/" || echo "  ✗ .antigravity/"
     done
 }
 
@@ -148,6 +147,7 @@ ag-help() {
 📝 MEMORY BANK
   mbk             → Edit Memory Bank (current project)
   mbc             → Edit context.md (quick access)
+  mbt             → Edit task.md (quick access)
   mb-status       → Show Memory Bank file status
 
 🚀 PROJECT MANAGEMENT
@@ -157,9 +157,8 @@ ag-help() {
   c               → Start Claude
   ag-priority     → Show agent priority chain
 
-⚙️  CONFIGURATION
-  ag-rules        → Edit shared rule templates
-  ag-sync-rules   → Sync rules to all projects
+🔧 MAINTENANCE
+  ag-status       → Check agent setup across all projects
 
 📚 HELP
   ag-help         → Show this help

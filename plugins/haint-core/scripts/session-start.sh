@@ -40,7 +40,7 @@ fi
 echo "--- Memory Bank ---"
 
 # Priority files first
-for f in brief.md context.md tech.md; do
+for f in brief.md context.md task.md tech.md; do
     if [ -f "$MB_DIR/$f" ]; then
         echo "=== $f ==="
         head -50 "$MB_DIR/$f"
@@ -53,7 +53,7 @@ for f in "$MB_DIR"/*.md; do
     [ ! -f "$f" ] && continue
     basename_f=$(basename "$f")
     case "$basename_f" in
-        brief.md|context.md|tech.md) continue ;;
+        brief.md|context.md|task.md|tech.md) continue ;;
     esac
     echo "=== $basename_f ==="
     head -50 "$f"
