@@ -1,6 +1,6 @@
 {
   "name": "haint-core",
   "description": "Core hooks and workflow skills: Memory Bank auto-load, git safety, notifications, fix-issue, review-pr",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": { "name": "Hải" }
 }
