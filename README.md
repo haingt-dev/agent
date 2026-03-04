@@ -10,9 +10,8 @@ Cross-project tools and templates for multi-agent development (Claude, Kilo Code
 ~/agent/  (symlinked as ~/.agent_global/)
 ├── bootstrap-project.sh    # Bootstrap new project with full agent structure
 ├── shell-aliases.sh        # Shell shortcuts (source in ~/.zshrc)
-├── hooks/                  # Git hooks (post-commit Memory Bank reminder)
 ├── plugins/
-│   ├── haint-core/         # Core plugin: hooks, skills (fix-issue, review-pr, story)
+│   ├── haint-core/         # Core plugin: hooks, skills (ship, fix-issue, review-pr, story)
 │   └── godot-dev/          # Godot plugin: gdformat, GDScript workflows
 └── templates/
     ├── memory-bank/        # Templates for new project Memory Banks

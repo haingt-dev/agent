@@ -10,6 +10,7 @@ Core Claude Code plugin: Memory Bank auto-load, git safety checks, notifications
 
 ## Skills
 
+- **ship**: Verify, update Memory Bank, and commit — one command to ship changes. Usage: `/ship [commit message]`
 - **fix-issue**: Fix a GitHub issue end-to-end — investigate, implement, test, commit, PR. Usage: `/fix-issue <issue-number>`
 - **review-pr**: Review a pull request for correctness, edge cases, code quality. Usage: `/review-pr <pr-number>`
 - **story**: Capture interesting dev stories (debugging journeys, architecture decisions, creative workarounds) for future devlogs/blog posts. Auto-suggests when detecting notable moments.
