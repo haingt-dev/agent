@@ -10,7 +10,7 @@ Godot 4.x development skills for Claude Code.
 ## Install
 
 ```bash
-claude plugin marketplace add ~/agent
+claude plugin marketplace add ~/Projects/agent
 claude plugin install godot-dev@agent --scope project
 ```
 

@@ -18,6 +18,6 @@ Core Claude Code plugin: Memory Bank auto-load, git safety checks, notifications
 ## Install
 
 ```bash
-claude plugin marketplace add ~/agent
+claude plugin marketplace add ~/Projects/agent
 claude plugin install haint-core@haint-marketplace --scope user
 ```

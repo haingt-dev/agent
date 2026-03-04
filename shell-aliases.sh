@@ -1,15 +1,15 @@
 #!/bin/bash
 # Agent Global Hub - Shell Aliases
 # Source this file in your ~/.zshrc or ~/.bashrc:
-# source ~/.agent_global/shell-aliases.sh
+# source ~/Projects/agent/shell-aliases.sh
 
 # ============================================
 # AGENT GLOBAL HUB NAVIGATION
 # ============================================
 
 # Quick access to Agent Global Hub
-alias ag='cd ~/.agent_global && ls -la'
-alias ag-edit='cd ~/.agent_global && $EDITOR .'
+alias ag='cd ~/Projects/agent && ls -la'
+alias ag-edit='cd ~/Projects/agent && $EDITOR .'
 
 # Quick access to projects
 alias cdp='cd ~/Projects'
@@ -20,7 +20,7 @@ alias cdv='cd ~/Projects/Idea_Vault'
 # ============================================
 
 # Bootstrap new project
-alias bootstrap='~/.agent_global/bootstrap-project.sh'
+alias bootstrap='~/Projects/agent/bootstrap-project.sh'
 
 # Edit Memory Bank in current project
 mbk() {

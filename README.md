@@ -7,7 +7,7 @@ Cross-project tools and templates for multi-agent development (Claude, Kilo Code
 ## Structure
 
 ```
-~/agent/  (symlinked as ~/.agent_global/)
+~/Projects/agent/
 ├── bootstrap-project.sh    # Bootstrap new project with full agent structure
 ├── shell-aliases.sh        # Shell shortcuts (source in ~/.zshrc)
 ├── plugins/

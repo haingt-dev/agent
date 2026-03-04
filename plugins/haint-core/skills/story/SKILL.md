@@ -53,7 +53,7 @@ Suggest capturing a story when you notice:
 
 - Stories: `.memory-bank/stories/YYYY-MM-DD-slug.md`
 - Index: `.memory-bank/stories/index.md`
-- Template reference: `~/.agent_global/templates/memory-bank/stories/template.md`
+- Template reference: `~/Projects/agent/templates/memory-bank/stories/template.md`
 
 ## Notes
 
