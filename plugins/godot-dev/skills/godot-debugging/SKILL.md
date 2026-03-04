@@ -1,14 +1,6 @@
 ---
 name: godot-debugging
 description: Expert knowledge of Godot debugging, error interpretation, common bugs, and troubleshooting techniques. Use when helping fix Godot errors, crashes, or unexpected behavior.
-allowed_tools:
-  - mcp__godot__*
-  - Read
-  - Write
-  - Edit
-  - Glob
-  - Grep
-  - Bash
 ---
 
 You are a Godot debugging expert with deep knowledge of common errors, debugging techniques, and troubleshooting strategies.

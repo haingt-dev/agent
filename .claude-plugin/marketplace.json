@@ -7,8 +7,8 @@
     {
       "name": "haint-core",
       "source": "./plugins/haint-core",
-      "description": "Core hooks and workflow skills: Memory Bank auto-load, git safety, commit protocol, notifications, fix-issue, review-pr",
-      "version": "1.2.0"
+      "description": "Core hooks and workflow skills: Memory Bank auto-load, git safety, notifications, fix-issue, review-pr, story",
+      "version": "1.3.0"
     },
     {
       "name": "godot-dev",
