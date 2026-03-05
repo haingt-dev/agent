@@ -1,6 +1,9 @@
 ---
 name: skills-dashboard
 description: "Show all available skills for current project — lists every skill with description, usage, and scope (global vs project). Use this skill whenever the user asks about available skills, slash commands, what commands exist, 'what can you do', 'list skills', or wants to see a skill overview/dashboard. Also trigger when user asks for details about a specific skill by name."
+argument-hint: "[skill-name]"
+model: haiku
+allowed-tools: Read, Glob
 ---
 
 # Skills Dashboard
@@ -76,10 +79,12 @@ If no argument (full dashboard):
 ```
 
 If argument is a skill name (detail mode):
-- Search across all available plugins for a skill matching the argument (exact match on name, case-insensitive)
-- If found: read the full SKILL.md and show name, description, usage examples, modes/arguments
-- If not found: say so and list available skill names as suggestions
-- If ambiguous (partial match hits multiple): list matches and ask user to be more specific
+- Search across all available plugins for a skill matching the argument:
+  1. Try exact match first (case-insensitive)
+  2. If no exact match, try substring/partial match (e.g., "quest" matches "quest", "reschedule-quest")
+  3. If exactly one match → show it
+  4. If multiple matches → list them and ask user to be more specific
+  5. If no match at all → say so and list all available skill names as suggestions
 
 ## Rules
 

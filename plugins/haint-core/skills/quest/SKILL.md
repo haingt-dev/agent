@@ -1,6 +1,8 @@
 ---
 name: quest
-description: Add or update Todoist tasks with smart classification into quest system
+description: "Add or update Todoist tasks with smart classification into quest system. Use when user says 'thêm task', 'tạo task', 'add task', 'sửa task', 'update task', mentions adding/updating quests, or lists things to do."
+argument-hint: "[add/update task description]"
+allowed-tools: mcp__todoist__add-tasks, mcp__todoist__find-tasks, mcp__todoist__update-tasks
 ---
 
 # Quest — Smart Task Management
@@ -45,9 +47,11 @@ Add or update tasks with automatic classification into the quest system.
 
 ### Priority Convention
 
+The Todoist MCP uses p1=highest through p4=lowest, matching these conventions directly. Pass `priority: 1` for p1, `priority: 2` for p2, etc.
+
 | Priority | Usage |
 |----------|-------|
-| p1 | Daily recurring habits only (Anchor Chain) |
+| p1 | Anchor Chain habits ONLY — reserved exclusively for recurring daily habits in Daily Quests. Never assign p1 to other tasks, even important ones. |
 | p2 | Main Quests — important, career/life impact |
 | p3 | Side Quests — optional but regular |
 | p4 | Rewards, low-priority backlog |
@@ -110,10 +114,31 @@ For each task, classify using this decision tree:
 
 ## Step 1 (UPDATE mode): Find & Modify
 
-1. Search for the task using `mcp__todoist__find-tasks` with text from user's message
-2. If multiple matches, pick the most relevant one (or list and ask)
-3. Apply the requested changes via `mcp__todoist__update-tasks`
-4. Show before/after comparison
+1. Search: `mcp__todoist__find-tasks` with text from user's message
+2. Match selection:
+   - 1 match → use it
+   - Multiple matches → pick the most relevant by name similarity. If genuinely ambiguous, list top 3 and ask
+   - 0 matches → tell user, suggest checking the task name
+3. Apply changes via `mcp__todoist__update-tasks` — only include fields that need changing:
+   - Section move: update `sectionId` (look up target ID from the Structure Reference above)
+   - Priority change: update `priority`
+   - Label change: update `labels`
+   - Content edit: update `content`
+   - Due date: update `dueString`
+4. Show before/after comparison as a table:
+```
+| Field | Before | After |
+|-------|--------|-------|
+| Section | High Energy | Medium Energy |
+```
+
+## Handling Vague Tasks
+
+If a task description is too vague to classify (e.g., "do stuff", "handle that thing"):
+- Use whatever context is available from the conversation to infer intent
+- Default to **Main Quests / Medium Energy, p2** — it's the safest middle ground
+- Mention your reasoning so the user can correct if wrong
+- Never leave a task unclassified or put it in Inbox — a wrong classification is better than no classification (user can always fix it with `/quest sửa`)
 
 ## Rules
 

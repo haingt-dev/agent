@@ -1,6 +1,9 @@
 ---
 name: track
-description: Time tracking via Google Calendar — start/stop timers as visual blocks on timeline
+description: "Time tracking via Google Calendar — start/stop timers as visual blocks on timeline. Use when user says 'track time', 'start tracking', 'stop tracking', 'time report', or wants to log work hours as calendar events."
+argument-hint: "[start/stop/today]"
+model: sonnet
+allowed-tools: mcp__todoist__find-tasks, mcp__claude_ai_Google_Calendar__gcal_list_events, mcp__claude_ai_Google_Calendar__gcal_create_event, mcp__claude_ai_Google_Calendar__gcal_update_event
 ---
 
 # Track — Time Tracking
@@ -68,7 +71,10 @@ Read `$ARGUMENTS` and user message:
    - If not found → ask user which quest type, default to Blueberry (High Energy)
 
 2. Check for open tracking: `gcal_list_events` today on Time Tracking calendar
-   - If any event ends exactly at placeholder (end == start + 1h and event was created in last 2h) → warn: "Already tracking: [event]. Stop first?"
+   - An event is "active" if its end time is in the future (end > NOW). This catches the placeholder end (start + 1h) regardless of when the event was created — even if the user forgot to stop hours ago, as long as the placeholder hasn't passed yet.
+   - If an active event is found → ask: "Đang tracking [event name] từ [start time]. Muốn stop và start task mới không?"
+     - If user confirms → stop the active event (update end to NOW), then proceed to create new event
+     - If user declines → abort, don't create overlapping events
 
 3. Create event: `gcal_create_event`
    - `calendarId`: Time Tracking calendar ID
@@ -85,7 +91,10 @@ Read `$ARGUMENTS` and user message:
 ## STOP mode
 
 1. `gcal_list_events` today on Time Tracking calendar, most recent first
-2. Find the most recent event (by start time) — this is the "active" one
+2. Find the active event using these checks in order:
+   a. Any event whose end time is in the future (end > NOW) → active
+   b. If none found, check for the most recently started event whose description contains "Todoist task:" — if it started within the last 8h and its duration is exactly 1h (the placeholder), it's likely an un-stopped session. Ask user: "Event [name] started at [time] — still tracking?"
+   - If no active event found → "Không có task nào đang tracking."
 3. Update end time: `gcal_update_event`
    - `event.end.dateTime`: NOW
    - `sendUpdates`: `none`

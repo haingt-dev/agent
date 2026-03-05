@@ -1,6 +1,6 @@
 ---
 name: story
-description: Capture interesting dev stories for future devlogs/blog posts. Auto-suggests when detecting notable moments.
+description: "Capture interesting dev stories for future devlogs/blog posts. Use when user says 'capture story', 'ghi lại cái này', 'that was wild', wants to document a debugging journey, architecture decision, or notable dev moment."
 ---
 
 # Dev Story Capture
@@ -48,8 +48,9 @@ Suggest capturing a story when you notice:
    - **Technical Details**: optional, include if the technical specifics are interesting
 5. Show draft to user for review/edits
 6. Generate slug from title (lowercase, hyphens, no special chars)
-7. Save to `.memory-bank/stories/YYYY-MM-DD-slug.md`
-8. Append entry to `.memory-bank/stories/index.md`
+7. Check if `.memory-bank/stories/YYYY-MM-DD-slug.md` already exists. If it does, append `-2`, `-3`, etc. until unique (e.g., `2026-03-05-cache-bug-2.md`)
+8. Save to `.memory-bank/stories/YYYY-MM-DD-slug.md`
+9. Append entry to `.memory-bank/stories/index.md` as a table row: `| YYYY-MM-DD | Title | tag1, tag2 |`
 
 ## File Locations
 
@@ -59,7 +60,9 @@ Suggest capturing a story when you notice:
 
 ## Notes
 
-- Stories are NOT auto-loaded into session context (subfolder of .memory-bank is ignored by session-start.sh)
+- When invoked from `/ship` auto-capture, skip the user review step (step 5) — just capture and include in the commit
+- Slug generation: strip Vietnamese diacritics, lowercase, replace spaces/special chars with hyphens
+- Stories are NOT auto-loaded into session context — they live in a subfolder of .memory-bank which session-start.sh ignores by design. This keeps context lean; stories are reference material for blog posts, not working context needed every session.
 - Keep stories self-contained — each file should make sense without needing other stories
 - Status field: `draft` initially, user changes to `published` when used in a blog post
 - If `.memory-bank/stories/` doesn't exist, create it and initialize index.md first

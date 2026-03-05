@@ -1,6 +1,6 @@
 {
   "name": "haint-core",
-  "description": "Core hooks and workflow skills: Memory Bank auto-load, git safety, notifications, ship, fix-issue, review-pr, story, tempo, quest, reschedule-quest, track, skills-dashboard",
-  "version": "1.8.0",
-  "author": { "name": "Hải" }
+  "description": "Core workflow skills: Memory Bank, git safety, ship, fix-issue, review, project-status, story, tempo, quest, reschedule-quest, track, skills-dashboard",
+  "version": "2.0.0",
+  "author": { "name": "Hai" }
 }

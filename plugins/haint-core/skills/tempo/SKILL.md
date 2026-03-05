@@ -1,6 +1,9 @@
 ---
 name: tempo
-description: Daily dashboard — Todoist quests + Google Calendar events + evaluation
+description: "Daily dashboard — show today's quests, calendar schedule, and progress evaluation. Use when user says 'show my day', 'what's on today', 'daily overview', 'tempo', 'schedule today', or asks about their tasks/agenda for today/tomorrow/this week."
+argument-hint: "[today/tomorrow/weekly]"
+model: sonnet
+allowed-tools: mcp__todoist__find-tasks-by-date, mcp__todoist__get-overview, mcp__todoist__find-completed-tasks, mcp__claude_ai_Google_Calendar__gcal_list_events
 ---
 
 # Tempo — Daily Dashboard
@@ -108,11 +111,12 @@ After rendering the dashboard, add evaluation:
 **Completion rate:**
 - Count checked vs total tasks for today
 
-**Contextual suggestions:**
-- Overdue > 3 → "Nhiều overdue, `/reschedule-quest` để dọn board?"
+**Contextual suggestions** (apply whichever are relevant, not all):
+- Overdue tasks exist → mention count and suggest `/reschedule-quest` to clean the board. More overdue = more urgent the suggestion.
 - All Daily Quests done → positive note
 - Inbox has tasks → "Có X tasks chưa phân loại trong Inbox, `/quest` để sort?"
-- Heavy day (> 6 tasks) → suggest prioritizing or skipping low-priority items
+- Many tasks for one day → suggest focusing on high-priority ones first, consider `/reschedule-quest` for p3/p4 tasks
+- No Main Quests scheduled → note the gap — career/growth work might be slipping
 
 ## Step 4: Weekly Mode
 
@@ -132,10 +136,15 @@ If argument is "weekly" or "tuần":
 - Side Quests: X/Y completed
 
 ### Patterns
-[Note any patterns: which days were productive, which quests get skipped often]
+Look for these specific patterns in the data:
+- **Completion by day**: which weekdays had highest/lowest completion? (e.g., "Thứ 2 và 4 productive nhất, Thứ 6 hay skip")
+- **Recurring skips**: which tasks get rescheduled repeatedly? These may need to be removed, restructured, or moved to a different energy level
+- **Energy distribution**: are High Energy tasks actually getting done, or mostly Low Energy? Might indicate energy management issues
+- **Daily Quest streak**: how many consecutive days were all anchor habits completed?
+- **Quest type balance**: ratio of Main vs Side quest completion — too much Side might mean avoiding hard work, too little means burnout risk
 
 ### Gợi ý tuần tới
-[Actionable suggestions based on patterns]
+Actionable suggestions based on the patterns found above — be specific, reference actual task names and days.
 ```
 
 ## Rules

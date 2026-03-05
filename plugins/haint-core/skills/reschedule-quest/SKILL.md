@@ -1,6 +1,9 @@
 ---
 name: reschedule-quest
-description: Reschedule recurring quests — shift to next occurrence without completing
+description: "Reschedule recurring quests — shift to next occurrence without completing. Use when user says 'reschedule', 'skip task', 'bỏ qua task', 'dời task', or wants to push recurring tasks to next due date without marking done."
+argument-hint: "[task-name]"
+model: sonnet
+allowed-tools: mcp__todoist__find-tasks, mcp__todoist__find-tasks-by-date, mcp__todoist__update-tasks, mcp__todoist__complete-tasks
 ---
 
 # Reschedule Quest — Skip Recurring Quests
@@ -22,7 +25,7 @@ For a recurring task with `dueString: "every weekday"`:
 - **Complete** → marked done today, next occurrence auto-created (counts in stats)
 - **Reschedule** → update dueString to same pattern "every weekday" → Todoist recalculates next due date (nothing in completed history)
 
-<!-- Note: dueString re-submission shifting to next occurrence is undocumented Todoist behavior. Works as of 2026-03. -->
+**Important:** The dueString re-submission technique (setting the same dueString to shift to next occurrence) is undocumented Todoist behavior. It works as of 2026-03 but could change without notice. After each reschedule, verify the due date actually changed by checking the task's updated due info. If the date didn't change (Todoist stopped supporting this), fall back to manually computing the next date and setting `dueDate` directly.
 
 ## Todoist Reference
 
@@ -41,7 +44,8 @@ For a recurring task with `dueString: "every weekday"`:
 4. If non-recurring → warn: "Task này không recurring. Muốn reschedule thủ công tới ngày nào?"
 5. If Daily Quest → refuse: "Daily Quest không được reschedule. Làm đi!"
 6. Reschedule: `mcp__todoist__update-tasks` with the task's existing dueString (preserves recurrence, shifts to next occurrence)
-7. Show: "⏭️ Rescheduled: CCNA → next due: [date]"
+7. Verify: fetch the task again to confirm due date changed. If it didn't change, warn and retry with explicit next date via `dueDate`
+8. Show: "⏭️ Rescheduled: CCNA → next due: [date]"
 
 ## Flow B: No Argument (Interactive)
 

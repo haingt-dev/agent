@@ -1,6 +1,8 @@
 ---
 name: ship
-description: Verify, update Memory Bank, and commit — one command to ship changes
+description: "Verify, update Memory Bank, and commit — one command to ship changes. Use when user says 'ship it', 'commit this', 'done, ship', or wants to verify+commit their work."
+argument-hint: "[commit-message]"
+allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest *), Bash(make *), Read, Grep, Glob, Write, Edit
 ---
 
 # Ship
@@ -14,6 +16,10 @@ Verify → Update Memory Bank → Update Docs → Auto-capture Story → Commit.
 ```
 
 If no commit message provided, auto-generate one from the changes.
+
+## Step 0: Pre-flight Check
+
+Run `git status`. If there are no changes (nothing staged, no modifications, no untracked files), report "Nothing to ship" and stop.
 
 ## Step 1: Verify
 
@@ -30,7 +36,7 @@ Run the project's verification before committing.
    - `Makefile` with test target → `make test`
 3. If no test runner found → review `git diff` for bugs, security issues, logic errors
 
-**STOP immediately if verification fails.** Report the failure, do not continue to step 2.
+**STOP immediately if verification fails.** Report which specific tests/checks failed and the error output, then stop. Do not continue to step 2. The user needs to fix the failures before shipping.
 
 ## Step 2: Update Memory Bank
 
@@ -120,4 +126,4 @@ If `.memory-bank/` exists, evaluate whether this session is worth capturing as a
 - Follow the project's existing commit message conventions — check `git log --oneline -5`
 - Never commit files that contain secrets (`.env`, credentials)
 - Never push to remote — only local commits
-- If `$ARGUMENTS` is empty, generate a commit message based on the changes
+- If `$ARGUMENTS` is empty, generate a commit message using conventional commit format (`type(scope): description`) — check `git log --oneline -5` for the project's existing style and match it
