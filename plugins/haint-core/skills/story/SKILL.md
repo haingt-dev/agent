@@ -9,6 +9,8 @@ Capture moments worth writing about — debugging journeys, architecture decisio
 
 ## Trigger Signals
 
+<!-- Story trigger signals synced with: plugins/haint-core/skills/ship/SKILL.md -->
+
 Suggest capturing a story when you notice:
 - **Debugging odyssey**: multi-step investigation with a non-obvious root cause
 - **Architecture surprise**: a design decision that went against initial instinct

@@ -1,7 +1,6 @@
 ---
 name: review-pr
 description: Review a pull request for correctness, edge cases, and code quality.
-disable-model-invocation: true
 ---
 
 # Review PR Workflow

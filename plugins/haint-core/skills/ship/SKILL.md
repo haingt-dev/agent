@@ -1,12 +1,11 @@
 ---
 name: ship
 description: Verify, update Memory Bank, and commit — one command to ship changes
-disable-model-invocation: true
 ---
 
 # Ship
 
-Verify → Update Memory Bank → Update Docs → Commit. One command instead of many.
+Verify → Update Memory Bank → Update Docs → Auto-capture Story → Commit. One command instead of many.
 
 ## Usage
 
@@ -55,6 +54,57 @@ Check if code changes affect any project documentation:
 3. If no docs are affected → skip this step
 
 Include doc updates in the main code commit (not a separate commit).
+
+## Step 3.5: Auto-capture Story
+
+<!-- Story trigger signals synced with: plugins/haint-core/skills/story/SKILL.md -->
+
+If `.memory-bank/` exists, evaluate whether this session is worth capturing as a dev story. **No confirmation prompt** — decide autonomously.
+
+### 1. Determine tier from scope of changes
+
+| Tier | Signals | Action |
+|---|---|---|
+| **Trivial** | Typo, rename, config tweak, formatting | Skip silently |
+| **Small** | Bug fix, minor feature, small refactor | Create **micro-story** |
+| **Big** | New feature, architecture change, debugging odyssey, multi-file overhaul, creative workaround, performance win | Create **full story** |
+
+### 2. Tier Big requires at least 1 trigger signal
+
+- Debugging odyssey with non-obvious root cause
+- Architecture decision that went against initial instinct
+- Creative/unconventional workaround that worked
+- Performance win with interesting approach
+- Expectation flip (tried X, failed because Y)
+- Tool/library gotcha or undocumented behavior
+
+### 3. Create story by tier
+
+**Micro-story (Small tier):**
+- 1-3 sentences, natural tone, can be sarcastic/witty
+- Examples: "Fix cái bug mà AI generate sai path. Ironic." / "Thêm 1 button, sửa 3 file. Frontend moment."
+- Same file format as full story but minimal content
+- Status: `micro`
+
+**Full story (Big tier):**
+- **Title**: concise, descriptive
+- **Date**: today
+- **Tags**: 2-4 tags
+- **TL;DR**: 1-2 sentences
+- **The Problem**: what we were trying to do
+- **The Journey**: what happened, what we tried, what surprised us
+- **The Insight**: the takeaway
+- **Technical Details**: include if specifics are interesting
+- Status: `draft`
+
+### 4. Save
+
+- Save to `.memory-bank/stories/YYYY-MM-DD-slug.md`
+- Update `.memory-bank/stories/index.md` (create dir + index if needed)
+- Show in ship output:
+  - Micro → inline quote of the story
+  - Full → `Story captured: [title]`
+- Story file gets included in the memory bank commit in Step 4
 
 ## Step 4: Commit
 

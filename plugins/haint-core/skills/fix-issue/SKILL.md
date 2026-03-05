@@ -1,7 +1,6 @@
 ---
 name: fix-issue
 description: Fix a GitHub issue end-to-end — investigate, implement, test, commit, and open PR.
-disable-model-invocation: true
 ---
 
 # Fix Issue Workflow
