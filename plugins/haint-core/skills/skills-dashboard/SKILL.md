@@ -1,9 +1,9 @@
 ---
-name: skills
-description: Dashboard of all available skills in current project context
+name: skills-dashboard
+description: Show all available skills for current project — lists every skill with description, usage, and scope (global vs project)
 ---
 
-# Skills — Dashboard
+# Skills Dashboard
 
 Show all available skills for the current project, grouped by plugin and scope.
 
