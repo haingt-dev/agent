@@ -57,8 +57,7 @@ Rules are minimized to reduce per-turn token cost:
 
 Skills use YAML frontmatter for invocation control:
 
-- **Auto-invocable** (default): Claude calls when relevant (e.g., `create-note`, `write-gdd`)
-- **Manual-only** (`disable-model-invocation: true`): User triggers with `/name` (e.g., `/story`, `/review-pr`)
+- All skills are invocable by Claude when relevant or by user with `/name`
 - Supporting files (templates, references) live alongside SKILL.md in the same directory
 
 ### Hooks (`settings.json`)

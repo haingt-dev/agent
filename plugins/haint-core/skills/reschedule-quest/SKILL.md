@@ -22,6 +22,8 @@ For a recurring task with `dueString: "every weekday"`:
 - **Complete** → marked done today, next occurrence auto-created (counts in stats)
 - **Reschedule** → update dueString to same pattern "every weekday" → Todoist recalculates next due date (nothing in completed history)
 
+<!-- Note: dueString re-submission shifting to next occurrence is undocumented Todoist behavior. Works as of 2026-03. -->
+
 ## Todoist Reference
 
 ### Mandatory (NEVER reschedule)

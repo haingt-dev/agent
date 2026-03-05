@@ -22,14 +22,45 @@ Fetch and combine data from Todoist and Google Calendar to give Hải a complete
 - "weekly" / "tuần" → switch to Weekly mode (Step 4)
 - Specific date → target = that date
 
+## Todoist Structure Reference
+
+### Projects & Section IDs
+
+**🔥 Daily Quests** (`6g6f74gGg464CPv9`)
+- 🔗 Anchor Chain (`6g6f74jfm5VmhWG9`) — recurring daily habits
+
+**⚔️ Main Quests** (`6g6f74cmqrRj2937`)
+- 🧠 High Energy (`6g6f74h58rpwpv47`) — deep work, career, study
+- ⚡ Medium Energy (`6g6f74jhHXCVgxW7`) — coordination, reviews
+- 🌊 Low Energy (`6g6f74jrXXg5Pp37`) — passive learning, reading
+- 🏆 Milestones (`6g6h7Qfmj6MGFV97`) — goals/OKRs with target dates
+
+**🎮 Side Quests** (`6g6f74h9JQXGVX6p`)
+- 🎯 Passion (`6g6f74jRJwPPCmWp`) — personal projects, creative
+- 🏠 Life (`6g6f74qmvFxphmJG`) — admin, errands, household
+
+### Priority Convention
+
+| Priority | Usage |
+|----------|-------|
+| p1 | Daily recurring habits (Anchor Chain) |
+| p2 | Main Quests — important |
+| p3 | Side Quests — optional |
+| p4 | Low-priority backlog |
+
 ## Step 2: Fetch Data (parallel)
 
-Call these 3 in parallel:
-1. `mcp__todoist__get-overview` (no params) — project/section structure
-2. `mcp__todoist__find-tasks-by-date` with startDate = target date (includes overdue)
-3. `mcp__claude_ai_Google_Calendar__gcal_list_events` with timeMin = target 00:00:00, timeMax = target 23:59:59, timeZone = Asia/Ho_Chi_Minh
+Call these 2 in parallel:
+1. `mcp__todoist__find-tasks-by-date` with startDate = target date (includes overdue)
+2. `mcp__claude_ai_Google_Calendar__gcal_list_events` with timeMin = target 00:00:00, timeMax = target 23:59:59, timeZone = Asia/Ho_Chi_Minh
 
-## Step 3: Present Dashboard
+## Step 3: Group Tasks & Present Dashboard
+
+Group each task by matching its `projectId` against known IDs:
+- `projectId == 6g6f74gGg464CPv9` → Daily Quests / Anchor Chain
+- `projectId == 6g6f74cmqrRj2937` → Main Quests (sub-group by sectionId)
+- `projectId == 6g6f74h9JQXGVX6p` → Side Quests (sub-group by sectionId)
+- Unknown projectId → show under "Other" with project name from task data
 
 ```
 ## Tempo — [weekday, DD/MM/YYYY]
