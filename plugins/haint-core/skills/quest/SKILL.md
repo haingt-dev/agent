@@ -1,7 +1,8 @@
 ---
 name: quest
-description: "Add or update Todoist tasks with smart classification into quest system. Use when user says 'thêm task', 'tạo task', 'add task', 'sửa task', 'update task', mentions adding/updating quests, or lists things to do."
+description: "Add or update Todoist tasks with smart classification into quest system. Classifies by energy level, priority, and project automatically."
 argument-hint: "[add/update task description]"
+model: sonnet
 allowed-tools: mcp__todoist__add-tasks, mcp__todoist__find-tasks, mcp__todoist__update-tasks
 ---
 

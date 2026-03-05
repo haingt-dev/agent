@@ -1,6 +1,6 @@
 # Save System Pattern
 
-JSON-based save with optional encryption. Uses JSON (not .tres) because class renames break .tres deserialization.
+JSON-based save system. Uses JSON (not .tres) because class renames break .tres deserialization.
 
 ## SaveManager (Autoload)
 

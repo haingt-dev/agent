@@ -1,6 +1,6 @@
 ---
 name: godot-gdscript-patterns
-description: "Godot 4.x GDScript architecture patterns and project conventions. Guides pattern selection (state machine vs component vs singleton), enforces project conventions, and provides on-demand pattern references. Use when building a new Godot system, refactoring architecture, or asking about GDScript best practices."
+description: "Godot 4.x GDScript architecture patterns and project conventions. Guides pattern selection, enforces naming/typing conventions, and provides on-demand implementation references."
 model: sonnet
 allowed-tools: Read, Grep, Glob
 ---
@@ -43,7 +43,7 @@ When building a new system, choose pattern based on the problem:
 If the pattern needs more detail, read the reference file:
 - `references/state-machine.md` — Full StateMachine + State base class implementation
 - `references/components.md` — HealthComponent, Hitbox/Hurtbox, KnockbackComponent
-- `references/save-system.md` — Multi-slot JSON save with encryption + preview
+- `references/save-system.md` — Multi-slot JSON save with preview
 - `references/object-pool.md` — Generic ObjectPool with signal-based return
 
 ## Corrective Lens: Pattern Mistakes
@@ -81,8 +81,3 @@ If the pattern needs more detail, read the reference file:
 - Reuse arrays/dictionaries in hot paths — `array.clear()` instead of `var array = []`
 - Use typed arrays (`Array[Node2D]`) — faster iteration than untyped
 
-## Fresh Docs
-
-For exact Godot 4.x API signatures, use Context7 MCP rather than guessing:
-1. `mcp__claude_ai_Context7__resolve-library-id` → find "godot"
-2. `mcp__claude_ai_Context7__query-docs` → get current API details

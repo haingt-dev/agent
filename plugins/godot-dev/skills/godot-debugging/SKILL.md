@@ -1,8 +1,8 @@
 ---
 name: godot-debugging
-description: "Debug Godot 4.x errors, crashes, and unexpected behavior. Provides Godot-specific debugging workflow, common model mistakes to avoid, and profiler guidance. Use when user reports a Godot error, crash, performance issue, unexpected behavior, or says 'why isn't this working' in a Godot project."
+description: "Debug Godot 4.x errors, crashes, and unexpected behavior. Corrective lens for Godot 3 vs 4 API confusion, async pitfalls, lifecycle timing, and physics gotchas."
 model: sonnet
-allowed-tools: Read, Grep, Glob, Bash(grep *), Bash(rg *)
+allowed-tools: Read, Grep, Glob, Bash(grep *)
 ---
 
 # Godot Debugging
@@ -81,4 +81,3 @@ If unsure about exact API signatures for Godot 4.4+, use Context7:
 - `push_error()` for unrecoverable, `push_warning()` for suspicious but safe
 - `assert()` for debug-only invariants (stripped in release)
 - Static typing mandatory: all vars, params, returns
-- Cache node references in `_ready()`, never `$Path` in `_process()`

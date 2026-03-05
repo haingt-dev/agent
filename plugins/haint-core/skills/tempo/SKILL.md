@@ -1,6 +1,6 @@
 ---
 name: tempo
-description: "Daily dashboard — show today's quests, calendar schedule, and progress evaluation. Use when user says 'show my day', 'what's on today', 'daily overview', 'tempo', 'schedule today', or asks about their tasks/agenda for today/tomorrow/this week."
+description: "Daily dashboard — show today's quests, calendar schedule, and progress evaluation. Supports today, tomorrow, and weekly views."
 argument-hint: "[today/tomorrow/weekly]"
 model: sonnet
 allowed-tools: mcp__todoist__find-tasks-by-date, mcp__todoist__get-overview, mcp__todoist__find-completed-tasks, mcp__claude_ai_Google_Calendar__gcal_list_events
