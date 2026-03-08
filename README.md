@@ -8,10 +8,15 @@ Claude Code global hub — plugins, skills, hooks, templates, and global configs
 
 ```
 ~/Projects/agent/
-├── bootstrap-project.sh    # Bootstrap new project with full agent structure
+├── bootstrap-project.sh    # Bootstrap new project + auto-register in hub
+├── ag-sync-rules.sh        # Sync shared rules to child projects + update registry
+├── ag-registry-audit.sh    # Full drift check: registry vs actual state
+├── registry.json           # Reverse index of all child projects
 ├── shell-aliases.sh        # Shell shortcuts (source in ~/.zshrc)
+├── .claude/scripts/
+│   └── registry-check.sh   # SessionStart hook: lightweight drift alert
 ├── plugins/
-│   ├── haint-core/         # Core plugin: hooks, skills (ship, fix-issue, review-pr, story)
+│   ├── haint-core/         # Core plugin: hooks (SessionStart, PreToolUse, Notification)
 │   └── godot-dev/          # Godot plugin: gdformat, GDScript workflows
 └── templates/
     ├── memory-bank/        # Templates for new project Memory Banks
@@ -63,6 +68,20 @@ Skills use YAML frontmatter for invocation control:
 | `SessionStart` | Inject git status + Memory Bank context |
 | `PreToolUse` (Bash) | Block dangerous commands, scan for secrets in staged files |
 | `Stop` (project-specific) | Auto-format on save (e.g., gdformat for Godot) |
+
+### Project Registry
+
+The hub maintains a reverse index (`registry.json`) of all child projects — which plugins, rules, skills, and MCPs each project uses.
+
+| Component | Role |
+|-----------|------|
+| `registry.json` | Source of truth: project metadata, resources used |
+| `ag-registry-audit.sh` | Full audit: compares registry against filesystem + installed_plugins.json |
+| `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, alerts on drift |
+| `bootstrap-project.sh` | Auto-registers new projects on bootstrap |
+| `ag-sync-rules.sh` | Updates registry rules after syncing |
+
+**Drift detection**: hybrid pull model — hub SessionStart detects drift automatically, scripts that modify children update the registry as a side effect.
 
 ## Quick Commands
 

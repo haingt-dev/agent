@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "description": "Hub registry — reverse index of which projects use which hub resources",
+  "projects": {
+    "Bookie": {
+      "path": "/home/haint/Projects/Bookie",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": ["notebooklm"],
+      "skills": ["catalog-insights", "create-storyboard", "extract-notes", "extract-notes-workspace", "generate-prompts", "new-subproject", "produce-video", "write-metadata", "write-video"],
+      "notes": "Media/video production workflow. Custom Bash hook for large media warnings."
+    },
+    "chimera-protocol": {
+      "path": "/home/haint/Projects/chimera-protocol",
+      "type": "godot",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": ["godot-dev"],
+      "rules": [],
+      "mcps": [],
+      "skills": ["check-gdd", "test", "write-gdd"],
+      "notes": ""
+    },
+    "Idea_Vault": {
+      "path": "/home/haint/Projects/Idea_Vault",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": ["obsidian"],
+      "skills": ["create-note", "obsidian-bases", "obsidian-markdown"],
+      "notes": "Obsidian/note-taking workspace."
+    },
+    "media-server": {
+      "path": "/home/haint/Projects/media-server",
+      "type": "infra",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": ["stack-health", "stack-up"],
+      "notes": "Docker-based media server stack."
+    },
+    "My_CVs": {
+      "path": "/home/haint/Projects/My_CVs",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": ["compile", "sync-cv"],
+      "notes": "CV/resume management."
+    },
+    "Wildtide": {
+      "path": "/home/haint/Projects/Wildtide",
+      "type": "godot",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": ["godot-dev"],
+      "rules": ["wildtide-conventions"],
+      "mcps": [],
+      "skills": ["lint", "new-scene", "test", "update-mb", "write-gdd"],
+      "notes": "Stop hook runs gdformat on modified .gd files."
+    },
+    "workstation-setup": {
+      "path": "/home/haint/Projects/workstation-setup",
+      "type": "infra",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": ["test-setup", "validate"],
+      "notes": "System/workstation configuration."
+    }
+  }
+}

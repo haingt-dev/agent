@@ -6,11 +6,20 @@ set -e
 
 TEMPLATES_DIR="$HOME/Projects/agent/templates/rules"
 PROJECTS_DIR="$HOME/Projects"
+REGISTRY="$HOME/Projects/agent/registry.json"
 RULES=("commit-protocol.md" "soul.md")
 
 for rule in "${RULES[@]}"; do
     [ ! -f "$TEMPLATES_DIR/$rule" ] && echo "Error: $TEMPLATES_DIR/$rule not found" && exit 1
 done
+
+update_registry_rules() {
+    local name="$1" path="$2"
+    [ ! -f "$REGISTRY" ] || ! command -v jq &>/dev/null && return
+    local actual_rules
+    actual_rules=$(find "$path/.claude/rules" -maxdepth 1 -name '*.md' -exec basename {} .md \; 2>/dev/null | sort | jq -R . | jq -s .)
+    jq --arg n "$name" --argjson r "$actual_rules" '.projects[$n].rules = $r' "$REGISTRY" > "$REGISTRY.tmp" && mv "$REGISTRY.tmp" "$REGISTRY"
+}
 
 sync_project() {
     local name=$(basename "$1") updated=0
@@ -21,7 +30,7 @@ sync_project() {
             [ -d "$1/$dir" ] && ! diff -q "$src" "$target" &>/dev/null && cp "$src" "$target" && updated=$((updated + 1))
         done
     done
-    [ $updated -gt 0 ] && echo "  + $name ($updated updated)" || echo "  . $name (up to date)"
+    [ $updated -gt 0 ] && echo "  + $name ($updated updated)" && update_registry_rules "$name" "$1" || echo "  . $name (up to date)"
 }
 
 echo "Syncing rules: ${RULES[*]}"

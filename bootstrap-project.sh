@@ -132,7 +132,48 @@ else
 fi
 
 # ============================================
-# 3. SUMMARY
+# 3. REGISTER IN HUB
+# ============================================
+REGISTRY="$HOME/Projects/agent/registry.json"
+if [ -f "$REGISTRY" ] && command -v jq &>/dev/null; then
+    existing=$(jq -r --arg n "$PROJECT_NAME" '.projects[$n] // empty' "$REGISTRY")
+    if [ -z "$existing" ]; then
+        # Detect project type
+        PROJECT_TYPE="app"
+        [ -f "$PROJECT_PATH/project.godot" ] && PROJECT_TYPE="godot"
+        [ -f "$PROJECT_PATH/docker-compose.yml" ] || [ -f "$PROJECT_PATH/docker-compose.yaml" ] && PROJECT_TYPE="infra"
+        [ -f "$PROJECT_PATH/Dockerfile" ] && [ "$PROJECT_TYPE" = "app" ] && PROJECT_TYPE="infra"
+
+        REAL_PATH=$(cd "$PROJECT_PATH" && pwd)
+        jq --arg name "$PROJECT_NAME" \
+           --arg path "$REAL_PATH" \
+           --arg type "$PROJECT_TYPE" \
+           '.projects[$name] = {
+               "path": $path,
+               "type": $type,
+               "status": "active",
+               "bootstrapped": true,
+               "plugins": [],
+               "rules": [],
+               "mcps": [],
+               "skills": [],
+               "notes": ""
+           }' "$REGISTRY" > "$REGISTRY.tmp" && mv "$REGISTRY.tmp" "$REGISTRY"
+        echo ""
+        echo "📋 Registered in hub registry (type: $PROJECT_TYPE)"
+    else
+        # Update bootstrapped flag if needed
+        jq --arg name "$PROJECT_NAME" '.projects[$name].bootstrapped = true' "$REGISTRY" > "$REGISTRY.tmp" && mv "$REGISTRY.tmp" "$REGISTRY"
+        echo ""
+        echo "📋 Registry entry exists (updated bootstrapped=true)"
+    fi
+else
+    echo ""
+    echo "⚠️  Registry not found or jq missing — skipping registration"
+fi
+
+# ============================================
+# 4. SUMMARY
 # ============================================
 echo ""
 echo "✅ Bootstrap complete!"

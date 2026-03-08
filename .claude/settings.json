@@ -8,5 +8,15 @@
       "mcp__claude_ai_Google_Calendar__*",
       "mcp__claude_ai_Gmail__*"
     ]
+  },
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": ".claude/scripts/registry-check.sh",
+        "timeout": 10
+      }]
+    }]
   }
 }
