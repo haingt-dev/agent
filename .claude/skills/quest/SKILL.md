@@ -13,8 +13,8 @@ Add or update tasks with automatic classification into the quest system.
 ## Usage
 
 ```
-/quest thêm task học Docker, mua sữa cho vợ
-/quest sửa CCNA priority p1
+/quest add task học Docker, mua sữa cho vợ
+/quest update CCNA priority p1
 ```
 
 ## Todoist Structure Reference
@@ -62,6 +62,7 @@ The Todoist MCP uses p1=highest through p4=lowest, matching these conventions di
 Read `$ARGUMENTS` and the user's message:
 - Keywords "thêm", "add", "tạo", or a list of tasks → **ADD mode**
 - Keywords "sửa", "update", "chuyển", "đổi", "move" → **UPDATE mode**
+- (Supports both Vietnamese and English keywords)
 
 ## Step 1 (ADD mode): Classify & Create
 

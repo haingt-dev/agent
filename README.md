@@ -1,6 +1,6 @@
 # Agent Global Hub
 
-Cross-project tools and templates for multi-agent development (Claude, Kilo Code, Antigravity).
+Claude Code global hub — plugins, skills, hooks, templates, and global configs.
 
 **Note**: All agent rules and configs are per-project. This hub only contains shared scripts, templates, and plugins.
 
@@ -27,16 +27,12 @@ Every project has this structure (created by `bootstrap`):
 
 ```
 project/
-├── AGENTS.md               # Shared context (all agents read this)
 ├── .memory-bank/           # Project knowledge (brief, product, context, task, arch, tech)
 │   └── stories/            # Dev stories for devlogs (not auto-loaded)
 ├── .claude/
-│   ├── CLAUDE.md           # Claude-specific config
+│   ├── CLAUDE.md           # Project context, values, memory bank, security
 │   ├── settings.json       # Project-specific hooks (if any)
 │   └── skills/<name>/      # Skills (SKILL.md + supporting files)
-├── .kilocode/rules/        # Kilo Code rules
-├── .antigravity/rules.md   # Antigravity workspace rules
-├── .agent/skills/          # Antigravity skills
 └── .mcp.json               # Project-level MCP servers (where needed)
 ```
 
@@ -49,7 +45,7 @@ Rules are minimized to reduce per-turn token cost:
 | What | Where | Token cost |
 |------|-------|------------|
 | Enforcement (security, dangerous commands) | `settings.json` hooks | **0** (runs as shell) |
-| Core directives (no dirty state, reversibility) | `AGENTS.md` Values | Once per session |
+| Core directives (no dirty state, reversibility) | `.claude/CLAUDE.md` Values | Once per session |
 | Memory Bank context | `SessionStart` hook output | Once per session |
 | Project-specific workflows | `skills/<name>/SKILL.md` | On invocation only |
 

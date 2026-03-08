@@ -2,7 +2,7 @@
 name: godot-debugging
 description: "Debug Godot 4.x errors, crashes, and unexpected behavior. Corrective lens for Godot 3 vs 4 API confusion, async pitfalls, lifecycle timing, and physics gotchas."
 model: sonnet
-allowed-tools: Read, Grep, Glob, Bash(grep *)
+allowed-tools: Read, Grep, Glob, Bash(grep *), mcp__claude_ai_Context7__resolve-library-id, mcp__claude_ai_Context7__query-docs
 ---
 
 # Godot Debugging

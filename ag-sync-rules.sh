@@ -16,7 +16,7 @@ sync_project() {
     local name=$(basename "$1") updated=0
     for rule in "${RULES[@]}"; do
         local src="$TEMPLATES_DIR/$rule"
-        for dir in .claude/rules .kilocode/rules .agents/rules; do
+        for dir in .claude/rules; do
             local target="$1/$dir/$rule"
             [ -d "$1/$dir" ] && ! diff -q "$src" "$target" &>/dev/null && cp "$src" "$target" && updated=$((updated + 1))
         done

@@ -27,23 +27,12 @@ EOF
     exit 0
 }
 
-# --- Tier 1: DENY — catastrophic, no bypass ---
-if echo "$COMMAND" | grep -qE 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+/\s*$'; then
-    emit "deny" "Catastrophic: rm -rf / (root filesystem deletion)"
-fi
-if echo "$COMMAND" | grep -qE 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(~|\$HOME|\$\{HOME\})\s*$'; then
-    emit "deny" "Catastrophic: rm -rf ~ (home directory deletion)"
-fi
-
-# --- Tier 2: ASK — dangerous but confirmable ---
+# --- ASK — dangerous but confirmable ---
+# Note: rm -rf /, rm -rf ~, git push --force, git reset --hard
+# are already handled by global settings.local.json deny/ask rules.
+# Hook only covers checks NOT in settings.
 if echo "$COMMAND" | grep -qE 'rm\s+-[a-zA-Z]*r[a-zA-Z]*f'; then
     emit "ask" "Dangerous: recursive force delete"
-fi
-if echo "$COMMAND" | grep -qE 'git\s+push\s.*--force'; then
-    emit "ask" "Dangerous: git force push"
-fi
-if echo "$COMMAND" | grep -qE 'git\s+reset\s+--hard'; then
-    emit "ask" "Dangerous: git reset --hard (discards uncommitted changes)"
 fi
 if echo "$COMMAND" | grep -qE 'git\s+clean\s+-[a-zA-Z]*f'; then
     emit "ask" "Dangerous: git clean -f (removes untracked files)"

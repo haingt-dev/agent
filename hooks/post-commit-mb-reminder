@@ -85,7 +85,7 @@ if [ "$SIGNIFICANCE" -ge 4 ]; then
     fi
 
     echo ""
-    echo "  Why? Keeps context fresh for Claude, Kilo & Antigravity"
+    echo "  Why? Keeps context fresh for Claude"
     echo ""
 fi
 

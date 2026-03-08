@@ -1,14 +1,10 @@
 #!/bin/bash
-# Bootstrap a new project with multi-agent integration
+# Bootstrap a new project with agent integration
 # Usage: bootstrap-project.sh /path/to/new/project [project-name]
 #
 # Creates:
-#   .memory-bank/       — Shared project knowledge (all agents)
-#   AGENTS.md            — Shared project instructions (all agents)
+#   .memory-bank/       — Project knowledge
 #   .claude/             — Claude Code config + rules + hooks
-#   .kilocode/           — Kilo Code config + rules
-#   .antigravity/        — Antigravity workspace rules
-#   .agent/skills/       — Antigravity workspace skills
 
 set -e
 
@@ -78,16 +74,16 @@ else
 fi
 
 # ============================================
-# 2. AGENTS.md (shared)
+# 2. CLAUDE CONFIG
 # ============================================
-AGENTS_MD="$PROJECT_PATH/AGENTS.md"
-if [ ! -f "$AGENTS_MD" ]; then
-    echo ""
-    echo "📋 Creating AGENTS.md..."
-    cat > "$AGENTS_MD" << EOF
-# $PROJECT_NAME — Project Context
+CLAUDE_DIR="$PROJECT_PATH/.claude"
+echo ""
+echo "🤖 Creating .claude/..."
+mkdir -p "$CLAUDE_DIR/rules"
 
-> Soul & identity: see ~/.claude/CLAUDE.md or ~/.gemini/GEMINI.md
+if [ ! -f "$CLAUDE_DIR/CLAUDE.md" ]; then
+    cat > "$CLAUDE_DIR/CLAUDE.md" << EOF
+# Claude Code — $PROJECT_NAME
 
 ## Project Values
 - **Minimal impact** — Make the smallest changes necessary. Don't over-engineer
@@ -118,28 +114,6 @@ After major tasks or architectural changes, update relevant Memory Bank files.
 - ASK before committing sensitive-looking files (\`config.json\`, \`.env*\`, \`credentials.*\`)
 - If secrets are accidentally committed: STOP, alert user to revoke, remove from history, add to \`.gitignore\`
 EOF
-    echo "  ✓ AGENTS.md"
-else
-    echo ""
-    echo "⏭ AGENTS.md (exists)"
-fi
-
-# ============================================
-# 3. AGENT CONFIG (per-agent)
-# ============================================
-
-# --- Claude ---
-CLAUDE_DIR="$PROJECT_PATH/.claude"
-echo ""
-echo "🤖 Creating .claude/..."
-mkdir -p "$CLAUDE_DIR/rules"
-
-if [ ! -f "$CLAUDE_DIR/CLAUDE.md" ]; then
-    cat > "$CLAUDE_DIR/CLAUDE.md" << EOF
-# Claude Code — $PROJECT_NAME
-
-See @../AGENTS.md for shared project context.
-EOF
     echo "  ✓ CLAUDE.md"
 else
     echo "  ⏭ CLAUDE.md (exists)"
@@ -157,64 +131,15 @@ else
     echo "  ⏭ settings.json (exists)"
 fi
 
-# --- Kilo Code ---
-echo ""
-echo "🔧 Creating .kilocode/..."
-mkdir -p "$PROJECT_PATH/.kilocode/rules"
-echo "  ✓ Kilo Code rules directory"
-
-# --- Antigravity ---
-echo ""
-echo "🌀 Creating .antigravity/..."
-mkdir -p "$PROJECT_PATH/.antigravity"
-mkdir -p "$PROJECT_PATH/.agent/skills"
-
-if [ ! -f "$PROJECT_PATH/.antigravity/rules.md" ]; then
-    cat > "$PROJECT_PATH/.antigravity/rules.md" << 'RULES_EOF'
-# Workspace Rules
-
-> Full project context: see AGENTS.md
-> Soul & identity: see ~/.gemini/GEMINI.md
-
-## Commit Protocol
-`<type>(<scope>): <description>`
-
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, white-space |
-| `refactor` | Code change (no fix/feat) |
-| `perf` | Performance improvement |
-| `test` | Adding/fixing tests |
-| `chore` | Build/tools maintenance |
-
-## Context Loading
-- On session start, read AGENTS.md for project context.
-- Read `.memory-bank/brief.md`, `.memory-bank/context.md`, and `.memory-bank/task.md` for current state.
-
-## Safety Guards
-- NEVER run `rm -rf /`, `git reset --hard`, `git push --force` without explicit confirmation.
-- NEVER commit files matching: `.env*`, `credentials.*`, `secrets.*`, `*.key`, `*.pem`.
-- Before committing, verify with `git diff --cached` that no secrets are staged.
-RULES_EOF
-    echo "  ✓ .antigravity/rules.md"
-else
-    echo "  ⏭ .antigravity/rules.md (exists)"
-fi
-echo "  ✓ .agent/skills/ directory"
-
 # ============================================
-# 4. SUMMARY
+# 3. SUMMARY
 # ============================================
 echo ""
 echo "✅ Bootstrap complete!"
 echo ""
 echo "📂 Structure:"
 echo "   $PROJECT_PATH/"
-echo "   ├── AGENTS.md              (shared — all agents)"
-echo "   ├── .memory-bank/          (shared — project knowledge)"
+echo "   ├── .memory-bank/          (project knowledge)"
 echo "   │   ├── brief.md"
 echo "   │   ├── product.md"
 echo "   │   ├── context.md"
@@ -223,14 +148,9 @@ echo "   │   ├── architecture.md"
 echo "   │   ├── tech.md"
 echo "   │   └── stories/          (dev stories — not auto-loaded)"
 echo "   ├── .claude/               (Claude Code)"
-echo "   │   ├── CLAUDE.md"
+echo "   │   ├── CLAUDE.md          (project context + values + memory bank)"
 echo "   │   ├── settings.json      (project-specific hooks only)"
 echo "   │   └── skills/            (add SKILL.md per workflow)"
-echo "   ├── .kilocode/             (Kilo Code)"
-echo "   │   └── rules/"
-echo "   ├── .antigravity/          (Antigravity)"
-echo "   │   └── rules.md"
-echo "   └── .agent/skills/         (Antigravity skills)"
 echo ""
 echo "📝 Next steps:"
 echo "   1. Fill in .memory-bank/ files with project details"

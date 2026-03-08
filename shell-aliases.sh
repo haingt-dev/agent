@@ -77,7 +77,7 @@ mb-status() {
 alias c='claude'
 
 # Show agent priority
-alias ag-priority='echo "🎯 Agent Priority Chain:\n  1. Claude (c)       → Complex work, deep analysis\n  2. Antigravity      → UI-based workflows\n  3. Kilo (VS Code)   → Editor integration"'
+alias ag-priority='echo "🎯 Agent: Claude Code (c)"'
 
 # Quick project switch with Claude
 cdc() {
@@ -121,8 +121,6 @@ ag-status() {
         [ -f "$project/AGENTS.md" ] && echo "  ✓ AGENTS.md" || echo "  ✗ AGENTS.md"
         [ -d "$project/.memory-bank" ] && echo "  ✓ .memory-bank/" || echo "  ✗ .memory-bank/"
         [ -f "$project/.claude/CLAUDE.md" ] && echo "  ✓ .claude/" || echo "  ✗ .claude/"
-        [ -d "$project/.kilocode/rules" ] && echo "  ✓ .kilocode/" || echo "  ✗ .kilocode/"
-        [ -f "$project/.antigravity/rules.md" ] && echo "  ✓ .antigravity/" || echo "  ✗ .antigravity/"
     done
 }
 

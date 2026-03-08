@@ -69,7 +69,7 @@ Group each task by matching its `projectId` against known IDs:
 ## Tempo — [weekday, DD/MM/YYYY]
 
 ### Calendar (time anchors)
-| Thời gian | Sự kiện |
+| Time | Event |
 |---|---|
 | HH:MM – HH:MM | event name |
 
@@ -98,7 +98,7 @@ Group each task by matching its `projectId` against known IDs:
 |---|---|
 | task name | DD/MM |
 
-### Đánh giá
+### Evaluation
 - Completion: X/Y tasks done
 - Overdue: Z tasks
 - [Contextual suggestions]
@@ -114,7 +114,7 @@ After rendering the dashboard, add evaluation:
 **Contextual suggestions** (apply whichever are relevant, not all):
 - Overdue tasks exist → mention count and suggest `/reschedule-quest` to clean the board. More overdue = more urgent the suggestion.
 - All Daily Quests done → positive note
-- Inbox has tasks → "Có X tasks chưa phân loại trong Inbox, `/quest` để sort?"
+- Inbox has tasks → "X unsorted tasks in Inbox — `/quest` to classify?"
 - Many tasks for one day → suggest focusing on high-priority ones first, consider `/reschedule-quest` for p3/p4 tasks
 - No Main Quests scheduled → note the gap — career/growth work might be slipping
 
@@ -143,7 +143,7 @@ Look for these specific patterns in the data:
 - **Daily Quest streak**: how many consecutive days were all anchor habits completed?
 - **Quest type balance**: ratio of Main vs Side quest completion — too much Side might mean avoiding hard work, too little means burnout risk
 
-### Gợi ý tuần tới
+### Suggestions for Next Week
 Actionable suggestions based on the patterns found above — be specific, reference actual task names and days.
 ```
 

@@ -1,0 +1,54 @@
+{
+  "skill_name": "token-optimize",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "My Claude Code sessions feel really expensive lately, especially in this Bookie project. Can you audit what's eating up my context window? I have a bunch of skills, MCP servers, memory bank files... I want to know exactly where the tokens are going and what I can cut.",
+      "expected_output": "A structured token audit report covering all context sources (CLAUDE.md, AGENTS.md, memory, skills, MCP), with a context breakdown table showing line/char/token counts per source, benchmark checks against thresholds, detected issues categorized by severity, and prioritized recommendations with estimated savings. Should also save a token-audit.json snapshot.",
+      "files": [],
+      "expectations": [
+        "Report includes a Context Breakdown table with columns for Source, Lines, Chars, Tokens, Category, and Status",
+        "Measures global CLAUDE.md (~/.claude/CLAUDE.md)",
+        "Measures project CLAUDE.md or AGENTS.md",
+        "Measures auto-memory MEMORY.md from ~/.claude/projects/ directory",
+        "Measures memory bank files (.memory-bank/*.md)",
+        "Measures skill descriptions from .claude/skills/*/SKILL.md frontmatter",
+        "Analyzes MCP servers and counts deferred tools with ~50 tokens per tool estimate",
+        "Benchmark checks include CLAUDE.md line count against 200-line threshold",
+        "Benchmark checks include MEMORY.md line count against 200-line threshold",
+        "Issues are categorized as Critical, Warning, or Info severity levels",
+        "Recommendations include estimated token savings",
+        "Report includes a Limitations section mentioning runtime costs are not measured",
+        "Saves or mentions saving token-audit.json snapshot"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I just set up a new project with 4 MCP servers and I'm worried about context overhead. Run a token optimization check — I specifically want to understand the MCP cost breakdown and whether my CLAUDE.md files are too long.",
+      "expected_output": "A token audit focusing on MCP analysis using the 3-tier model (DEFERRED/LOADED/RUNTIME) and CLAUDE.md size benchmarks. Should clearly distinguish between always-on deferred costs and on-demand loaded costs.",
+      "files": [],
+      "expectations": [
+        "MCP analysis distinguishes between DEFERRED tier (~50 tok/tool, always present) and LOADED tier (~200-400 tok/tool, on-demand)",
+        "MCP analysis mentions RUNTIME tier as not measurable statically",
+        "Reports MCP deferred cost as baseline (not loaded schema costs)",
+        "Checks each CLAUDE.md file against the 200-line threshold",
+        "Identifies if any MCP servers have no corresponding allow rules (possibly unused)",
+        "Total always-on token count is reported"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I suspect there's a lot of duplicated content between my CLAUDE.md, AGENTS.md, and memory bank files. Also I have like 12 skills and some of them might have really long descriptions eating my context. Can you do a full audit and tell me what to consolidate?",
+      "expected_output": "A token audit with emphasis on duplication detection across always-on files and skill description analysis. Should identify specific duplicated content and recommend canonical locations.",
+      "files": [],
+      "expectations": [
+        "Scans for duplicated content across CLAUDE.md, AGENTS.md, and memory bank files",
+        "Identifies specific duplicated information (not just generic warnings)",
+        "Counts total skill descriptions and their combined character/token cost",
+        "Checks combined skill description size against the 16,000 character threshold",
+        "Checks for over-specified CLAUDE.md (workflows that should be skills, file-specific rules that should be in .claude/rules/)",
+        "Recommendations specify which file should be the canonical location for duplicated content"
+      ]
+    }
+  ]
+}

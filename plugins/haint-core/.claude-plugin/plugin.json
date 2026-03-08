@@ -1,6 +1,6 @@
 {
   "name": "haint-core",
-  "description": "Core hooks (Memory Bank, git safety, notifications) + auto-trigger skills (tempo, quest). Manual-only skills moved to ~/.claude/skills/.",
-  "version": "2.2.0",
+  "description": "Core hooks only — Memory Bank injection, git safety, desktop notifications. Skills moved to project-level.",
+  "version": "3.0.0",
   "author": { "name": "Hai" }
 }

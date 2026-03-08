@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "WebSearch",
+      "WebFetch",
+      "Bash(*)",
+      "mcp__claude_ai_Context7__*"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(rm -rf ~)",
+      "Bash(sudo rm -rf *)"
+    ],
+    "ask": [
+      "Bash(git push --force*)",
+      "Bash(git reset --hard*)"
+    ],
+    "additionalDirectories": []
+  },
+  "model": "opus",
+  "enabledPlugins": {
+    "godot-dev@haint-marketplace": true,
+    "haint-core@haint-marketplace": true
+  },
+  "extraKnownMarketplaces": {
+    "haint-marketplace": {
+      "source": {
+        "source": "directory",
+        "path": "/home/haint/Projects/agent"
+      }
+    },
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
+  },
+  "effortLevel": "high"
+}
