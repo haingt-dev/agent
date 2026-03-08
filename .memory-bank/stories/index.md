@@ -10,3 +10,4 @@
 | 2026-03-06 | [3 tang chong — permission friction, hook double-gating, va stale worktree](2026-03-06-3-tang-chong-permission-friction.md) | claude-code, permissions, hooks, config-management |
 | 2026-03-06 | [settings.local.json ton tai, syntax dung, nhung bi ignore hoan toan](2026-03-06-settings-local-json-silently-ignored.md) | claude-code, permissions, config-management, gotcha |
 | 2026-03-06 | [CLAUDE.md Goes English — And Claude Actually Got Faster](2026-03-06-claude-md-goes-english-faster.md) | claude-code, english, config, optimization |
+| 2026-03-08 | [rm -rf và skill vừa tạo xong — bài học về kiểm tra untracked files](2026-03-08-rm-rf-va-skill-chua-commit.md) | debugging, claude-code, skills, gotcha |
