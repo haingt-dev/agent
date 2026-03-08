@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Verify, update Memory Bank, and commit — one command to ship changes."
+description: "Review, verify, update Memory Bank, and commit — one command to ship changes."
 argument-hint: "[commit-message]"
 disable-model-invocation: true
 allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest *), Bash(make *), Read, Grep, Glob, Write, Edit
@@ -8,7 +8,7 @@ allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest
 
 # Ship
 
-Verify → Update Memory Bank → Update Docs → Commit. One command instead of many.
+Pre-flight → Verify → Review → Update Memory Bank → Update Docs → Commit.
 
 ## Usage
 
@@ -35,11 +35,61 @@ Run the project's verification before committing.
    - `pyproject.toml` → `pytest`
    - `project.godot` with GUT → run GUT tests
    - `Makefile` with test target → `make test`
-3. If no test runner found → review `git diff` for bugs, security issues, logic errors
+3. If no test runner found → skip to Step 2 (review will catch issues)
 
-**STOP immediately if verification fails.** Report which specific tests/checks failed and the error output, then stop. Do not continue to step 2. The user needs to fix the failures before shipping.
+**STOP immediately if verification fails.** Report which specific tests/checks failed and the error output, then stop. Do not continue. The user needs to fix the failures before shipping.
 
-## Step 2: Update Memory Bank
+## Step 2: Review
+
+Always review the diff before committing — structured code review of all changes.
+
+### Determine what to review
+
+Review all uncommitted changes: `git diff` (unstaged) + `git diff --cached` (staged). If nothing there, review `git diff HEAD~1`.
+
+### Assess diff size
+
+- **Small** (<200 lines): review holistically
+- **Large** (200+ lines): review file-by-file, prioritize logic-heavy files (.py, .ts, .gd, .rs) over config/generated files
+
+### Review each change
+
+For each changed file/hunk:
+
+**Read context** — don't review the diff in isolation:
+- Read the full function around changed lines
+- If a function signature changed, grep for callers
+- If a test changed, check what it's actually testing
+
+**Check for:**
+
+1. **Correctness** — Does it do what it claims? Off-by-one errors, null access, race conditions, error handling gaps
+2. **Security** — Hardcoded secrets, injection vulnerabilities (SQL, command, XSS), path traversal, auth gaps
+3. **Logic** — Dead code paths, unreachable conditions, inverted boolean logic, missing edge cases
+4. **Style** — Follows existing patterns? Clear naming? Stale comments?
+5. **Tests** — New behavior covered? Tests actually assert the right thing?
+
+### Output review
+
+```
+## Review: [what was reviewed]
+
+### Issues
+- **Critical** [description] — `file:line`
+- **Warning** [description] — `file:line`
+
+### Good
+- [positive observations]
+
+### Summary
+X files changed. [N critical / N warning / N nit]. [LGTM or needs fixes].
+```
+
+If nothing found: "LGTM — no issues found in [N files, M lines changed]."
+
+**STOP if any Critical issues found.** Report them and stop. Warnings are reported but don't block shipping.
+
+## Step 3: Update Memory Bank
 
 If `.memory-bank/` exists in the project:
 
@@ -52,7 +102,7 @@ If `.memory-bank/` exists in the project:
 
 **Skip this step** if the changes are trivial (typos, formatting-only, config tweaks that don't affect context).
 
-## Step 3: Update Docs
+## Step 4: Update Docs
 
 Check if code changes affect any project documentation:
 
@@ -62,11 +112,11 @@ Check if code changes affect any project documentation:
 
 Include doc updates in the main code commit (not a separate commit).
 
-## Step 4: Commit
+## Step 5: Commit
 
 1. Stage all relevant code changes (exclude `.memory-bank/`)
 2. Create commit with conventional commit message, or use `$ARGUMENTS` if provided
-3. If Memory Bank was updated in step 2:
+3. If Memory Bank was updated in step 3:
    - Stage `.memory-bank/` files
    - Create a separate commit: `docs: update memory bank`
 4. Show the result: commit hash(es), files changed, summary
@@ -77,3 +127,7 @@ Include doc updates in the main code commit (not a separate commit).
 - Never commit files that contain secrets (`.env`, credentials)
 - Never push to remote — only local commits
 - If `$ARGUMENTS` is empty, generate a commit message using conventional commit format (`type(scope): description`) — check `git log --oneline -5` for the project's existing style and match it
+- Review is READ-ONLY — do not modify files during review. Fixes happen before `/ship`, not during.
+- Always read surrounding context during review, not just the diff lines
+- Be specific: cite file:line for every review issue
+- Don't flag style nits on code that wasn't changed in this diff
