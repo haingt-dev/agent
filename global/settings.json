@@ -23,7 +23,8 @@
   "model": "opus",
   "enabledPlugins": {
     "godot-dev@haint-marketplace": true,
-    "haint-core@haint-marketplace": true
+    "haint-core@haint-marketplace": true,
+    "skill-creator@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "haint-marketplace": {
