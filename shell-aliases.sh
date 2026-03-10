@@ -15,6 +15,10 @@ alias ag-edit='cd ~/Projects/agent && $EDITOR .'
 alias cdp='cd ~/Projects'
 alias cdv='cd ~/Projects/Idea_Vault'
 
+# Digital Identity — life management hub
+alias di='cd ~/Projects/digital-identity'
+alias dic='cd ~/Projects/digital-identity && claude --continue'
+
 # ============================================
 # PROJECT MANAGEMENT
 # ============================================
@@ -140,6 +144,8 @@ ag-help() {
   ag-edit         → Open Agent Global Hub in editor
   cdp             → Go to ~/Projects
   cdv             → Go to Obsidian Vault
+  di              → Go to Digital Identity
+  dic             → Go to Digital Identity + resume Claude session
   cdc <project>   → Switch to project + show Memory Bank
 
 📝 MEMORY BANK

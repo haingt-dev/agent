@@ -6,13 +6,15 @@
       "path": "/home/haint/Projects/agent",
       "type": "infra",
       "status": "active",
-      "bootstrapped": false,
+      "bootstrapped": true,
       "summary": "Claude Code plugin/skill hub — plugins, templates, registry for all projects",
       "plugins": [],
       "rules": [],
-      "mcps": ["todoist"],
-      "skills": ["quest", "tempo", "track", "reschedule-quest"],
-      "notes": "Hub project. Sparse memory-bank is expected."
+      "mcps": [],
+      "skills": [
+        "token-optimize-workspace"
+      ],
+      "notes": "Hub project. Life management skills moved to digital-identity."
     },
     "Bookie": {
       "path": "/home/haint/Projects/Bookie",
@@ -22,8 +24,20 @@
       "summary": "Reading community resource hub — AI book video production pipeline",
       "plugins": [],
       "rules": [],
-      "mcps": ["notebooklm"],
-      "skills": ["catalog-insights", "create-storyboard", "extract-notes", "extract-notes-workspace", "generate-prompts", "new-subproject", "produce-video", "write-metadata", "write-video"],
+      "mcps": [
+        "notebooklm"
+      ],
+      "skills": [
+        "catalog-insights",
+        "create-storyboard",
+        "extract-notes",
+        "extract-notes-workspace",
+        "generate-prompts",
+        "new-subproject",
+        "produce-video",
+        "write-metadata",
+        "write-video"
+      ],
       "notes": "Media/video production workflow. Custom Bash hook for large media warnings."
     },
     "chimera-protocol": {
@@ -32,11 +46,39 @@
       "status": "active",
       "bootstrapped": true,
       "summary": "2D pixel art Action-RPG/Metroidvania in Godot 4.5 — parasitic mutation mechanics",
-      "plugins": ["godot-dev"],
+      "plugins": [
+        "godot-dev"
+      ],
       "rules": [],
       "mcps": [],
-      "skills": ["check-gdd", "test", "write-gdd"],
+      "skills": [
+        "check-gdd",
+        "test",
+        "write-gdd"
+      ],
       "notes": ""
+    },
+    "digital-identity": {
+      "path": "/home/haint/Projects/digital-identity",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "summary": "Personal profile center — centralized identity for AI context, CVs, and blog",
+      "plugins": [],
+      "rules": [],
+      "mcps": [
+        "todoist"
+      ],
+      "skills": [
+        "compile",
+        "sync-cv",
+        "profile-review",
+        "quest",
+        "tempo",
+        "track",
+        "reschedule-quest"
+      ],
+      "notes": "Merged from My_CVs + HaiLazy. Life management skills (quest/tempo/track/reschedule-quest) moved from agent hub."
     },
     "Idea_Vault": {
       "path": "/home/haint/Projects/Idea_Vault",
@@ -46,8 +88,14 @@
       "summary": "Personal knowledge base in Obsidian — notes, ideas, research",
       "plugins": [],
       "rules": [],
-      "mcps": ["obsidian"],
-      "skills": ["create-note", "obsidian-bases", "obsidian-markdown"],
+      "mcps": [
+        "obsidian"
+      ],
+      "skills": [
+        "create-note",
+        "obsidian-bases",
+        "obsidian-markdown"
+      ],
       "notes": "Obsidian/note-taking workspace."
     },
     "media-server": {
@@ -59,20 +107,11 @@
       "plugins": [],
       "rules": [],
       "mcps": [],
-      "skills": ["stack-health", "stack-up"],
+      "skills": [
+        "stack-health",
+        "stack-up"
+      ],
       "notes": "Docker-based media server stack."
-    },
-    "My_CVs": {
-      "path": "/home/haint/Projects/My_CVs",
-      "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "CV/resume management and compilation",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": ["compile", "sync-cv"],
-      "notes": "CV/resume management."
     },
     "Wildtide": {
       "path": "/home/haint/Projects/Wildtide",
@@ -80,11 +119,45 @@
       "status": "active",
       "bootstrapped": true,
       "summary": "Open-world survival game in Godot 4.5 — dynamic ecosystem simulation",
-      "plugins": ["godot-dev"],
-      "rules": ["wildtide-conventions"],
+      "plugins": [
+        "godot-dev"
+      ],
+      "rules": [
+        "wildtide-conventions"
+      ],
       "mcps": [],
-      "skills": ["lint", "new-scene", "test", "update-mb", "write-gdd"],
+      "skills": [
+        "lint",
+        "new-scene",
+        "test",
+        "update-mb",
+        "write-gdd"
+      ],
       "notes": "Stop hook runs gdformat on modified .gd files."
+    },
+    "My_CVs": {
+      "path": "/home/haint/Projects/My_CVs",
+      "type": "app",
+      "status": "archived",
+      "bootstrapped": true,
+      "summary": "CV/resume management — absorbed into digital-identity/cv/",
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": [],
+      "notes": "Absorbed into digital-identity. Original directory kept as reference."
+    },
+    "HaiLazy": {
+      "path": "/home/haint/Projects/HaiLazy",
+      "type": "app",
+      "status": "archived",
+      "bootstrapped": true,
+      "summary": "Personal blog (Hugo 2020) — absorbed into digital-identity/reference/",
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": [],
+      "notes": "Absorbed into digital-identity. Original directory kept as reference."
     },
     "workstation-setup": {
       "path": "/home/haint/Projects/workstation-setup",
@@ -95,7 +168,10 @@
       "plugins": [],
       "rules": [],
       "mcps": [],
-      "skills": ["test-setup", "validate"],
+      "skills": [
+        "test-setup",
+        "validate"
+      ],
       "notes": "System/workstation configuration."
     }
   }

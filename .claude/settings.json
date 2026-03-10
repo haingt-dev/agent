@@ -1,14 +1,4 @@
 {
-  "enabledPlugins": {
-    "godot-dev@haint-marketplace": true
-  },
-  "permissions": {
-    "allow": [
-      "mcp__todoist__*",
-      "mcp__claude_ai_Google_Calendar__*",
-      "mcp__claude_ai_Gmail__*"
-    ]
-  },
   "hooks": {
     "SessionStart": [{
       "matcher": "",

@@ -7,7 +7,15 @@
       "WebSearch",
       "WebFetch",
       "Bash(*)",
-      "mcp__claude_ai_Context7__*"
+      "mcp__claude_ai_Context7__*",
+      "mcp__notebooklm__notebook_create",
+      "mcp__notebooklm__source_add",
+      "mcp__notebooklm__chat_configure",
+      "mcp__notebooklm__notebook_query",
+      "mcp__notebooklm__notebook_list",
+      "mcp__notebooklm__studio_create",
+      "mcp__notebooklm__studio_status",
+      "mcp__notebooklm__download_artifact"
     ],
     "deny": [
       "Bash(rm -rf /)",
@@ -16,13 +24,14 @@
     ],
     "ask": [
       "Bash(git push --force*)",
-      "Bash(git reset --hard*)"
+      "Bash(git reset --hard*)",
+      "mcp__claude_ai_Google_Calendar__*",
+      "mcp__claude_ai_Gmail__*"
     ],
     "additionalDirectories": []
   },
   "model": "opus",
   "enabledPlugins": {
-    "godot-dev@haint-marketplace": true,
     "haint-core@haint-marketplace": true,
     "skill-creator@claude-plugins-official": true
   },
