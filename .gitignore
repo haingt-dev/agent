@@ -5,3 +5,6 @@
 .claude/settings.local.json
 .claude/worktrees/
 .claude/plans/
+
+# Ephemeral memory artifacts
+memories/**/token-audit.json
