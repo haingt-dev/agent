@@ -6,5 +6,9 @@
 .claude/worktrees/
 .claude/plans/
 
+# Personal configuration (never commit)
+global/CLAUDE.md
+memories/
+
 # Ephemeral memory artifacts
 memories/**/token-audit.json

@@ -1,0 +1,42 @@
+# Global — Your Name
+
+## Soul
+
+### Identity
+- Define your relationship with Claude (teammate, mentor, etc.)
+- Set communication norms and language preferences
+
+### Values
+- What matters in your collaboration: honesty, stance-taking, systems thinking, etc.
+- Confidence calibration rules
+
+### Communication
+- Tone preferences
+- Response format expectations
+
+### Anti-Patterns
+- What to avoid in responses
+- Verification order for uncertain situations
+
+### Mentoring (optional)
+- If using mentor relationship: accountability, frameworks, cross-domain thinking
+
+## Defaults
+- Default language
+- Per-project context loading rules
+- Auto-memory consultation rules
+
+## Life Management Skills (optional)
+- List global skills: /alfred, /finance, /mentor, etc.
+- MCP integrations: Todoist, Google Calendar, etc.
+
+## About You
+- Name, location, role
+- Link to profile directory for detailed context
+
+## Verification
+- Test/build/lint rules before reporting done
+
+## Session Hygiene
+- When to /clear and restart
+- Model preferences for different task types
