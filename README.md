@@ -1,6 +1,20 @@
 # Agent Global Hub
 
-Claude Code global hub — plugins, skills, hooks, templates, and global configs.
+A personal infrastructure layer for Claude Code — centralizing plugins, skills, hooks, and project bootstrapping across a multi-project workspace.
+
+## Why
+
+Claude Code is powerful but each project is an island. Configuration, skills, and memory are project-local by default. This hub creates a shared layer: global skills available everywhere, plugins that inject context at session start, a registry that tracks all projects, and templates for bootstrapping new ones.
+
+## Features
+
+- **Global skills**: `/alfred` (life scheduler), `/mentor`, `/gen-image`, `/story`, `/token-optimize`
+- **Plugins**: `haint-core` (session hooks, context injection), `godot-dev` (Godot workflows)
+- **Project registry** with drift detection
+- **Bootstrap script** for new projects
+- **Memory system** for cross-project context
+
+---
 
 **Note**: All agent rules and configs are per-project. This hub only contains shared scripts, templates, and plugins.
 
@@ -92,3 +106,5 @@ ag-status        # Check agent setup across all projects
 mbk / mbc / mbt  # Edit Memory Bank / context.md / task.md
 cdc <project>    # Switch to project directory
 ```
+
+MIT License
