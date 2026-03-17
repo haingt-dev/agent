@@ -32,6 +32,7 @@
         "create-storyboard",
         "extract-notes",
         "extract-notes-workspace",
+        "gen-image",
         "generate-prompts",
         "new-subproject",
         "produce-video",
@@ -53,6 +54,7 @@
       "mcps": [],
       "skills": [
         "check-gdd",
+        "gen-image",
         "test",
         "write-gdd"
       ],
@@ -66,19 +68,14 @@
       "summary": "Personal profile center — centralized identity for AI context, CVs, and blog",
       "plugins": [],
       "rules": [],
-      "mcps": [
-        "todoist"
-      ],
+      "mcps": [],
       "skills": [
         "compile",
-        "sync-cv",
-        "profile-review",
-        "quest",
-        "tempo",
-        "track",
-        "reschedule-quest"
+        "reflect",
+        "arrange",
+        "finance"
       ],
-      "notes": "Merged from My_CVs + HaiLazy. Life management skills (quest/tempo/track/reschedule-quest) moved from agent hub."
+      "notes": "Personal profile center. Life management skills: quest + track moved to global, reschedule-quest merged into arrange, tempo deleted."
     },
     "Idea_Vault": {
       "path": "/home/haint/Projects/Idea_Vault",
@@ -127,6 +124,7 @@
       ],
       "mcps": [],
       "skills": [
+        "gen-image",
         "lint",
         "new-scene",
         "test",
@@ -173,6 +171,31 @@
         "validate"
       ],
       "notes": "System/workstation configuration."
+    },
+    "Learning_English": {
+      "path": "/home/haint/Projects/Learning_English",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": [
+        "gen-image"
+      ],
+      "notes": ""
+    },
+    "portfolio": {
+      "path": "/home/haint/Projects/portfolio",
+      "type": "app",
+      "status": "active",
+      "bootstrapped": true,
+      "summary": "Public portfolio site — Astro + Cloudflare Pages, dog-fooding the website service offering",
+      "plugins": [],
+      "rules": [],
+      "mcps": [],
+      "skills": [],
+      "notes": "Static site, no skills needed. Upwork URL placeholder in Contact.astro needs real URL."
     }
   }
 }

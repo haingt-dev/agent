@@ -23,54 +23,31 @@ if [ ! -d "$PROJECT_PATH" ]; then
 fi
 
 # ============================================
-# 1. MEMORY BANK (shared)
+# 1. MEMORY BANK (brief.md only — lightweight project identity)
 # ============================================
 MEMORY_BANK="$PROJECT_PATH/.memory-bank"
 echo "📝 Creating .memory-bank/..."
 mkdir -p "$MEMORY_BANK"
 
-if [ -d "$TEMPLATES/memory-bank" ]; then
-    for template in "$TEMPLATES/memory-bank"/*.md; do
-        if [ -f "$template" ]; then
-            filename=$(basename "$template")
-            if [ ! -f "$MEMORY_BANK/$filename" ]; then
-                cp "$template" "$MEMORY_BANK/"
-                echo "  ✓ $filename"
-            else
-                echo "  ⏭ $filename (exists)"
-            fi
-        fi
-    done
-else
-    for file in brief product context task architecture tech; do
-        [ ! -f "$MEMORY_BANK/$file.md" ] && echo "# ${file^}" > "$MEMORY_BANK/$file.md" && echo "  ✓ $file.md"
-    done
-fi
+if [ ! -f "$MEMORY_BANK/brief.md" ]; then
+    if [ -f "$TEMPLATES/memory-bank/brief.md" ]; then
+        cp "$TEMPLATES/memory-bank/brief.md" "$MEMORY_BANK/"
+    else
+        cat > "$MEMORY_BANK/brief.md" << BRIEF_EOF
+# Project Brief: $PROJECT_NAME
 
-# Stories subdirectory (not auto-loaded by session-start)
-mkdir -p "$MEMORY_BANK/stories"
-if [ -f "$TEMPLATES/memory-bank/stories/index.md" ] && [ ! -f "$MEMORY_BANK/stories/index.md" ]; then
-    cp "$TEMPLATES/memory-bank/stories/index.md" "$MEMORY_BANK/stories/"
-    echo "  ✓ stories/index.md"
-else
-    echo "  ⏭ stories/index.md (exists)"
-fi
+<!-- What is this project? Why does it exist? What problem does it solve? -->
 
-# Origin story (first story for every project)
-if ! ls "$MEMORY_BANK/stories/"*-origin.md &>/dev/null; then
-    TODAY=$(date +%Y-%m-%d)
-    ORIGIN_FILE="$MEMORY_BANK/stories/${TODAY}-origin.md"
-    if [ -f "$TEMPLATES/memory-bank/stories/origin.md" ]; then
-        sed "s/PROJECT_NAME/$PROJECT_NAME/g; s/YYYY-MM-DD/$TODAY/g" \
-            "$TEMPLATES/memory-bank/stories/origin.md" > "$ORIGIN_FILE"
+## Goals
+<!-- Key objectives -->
+
+## Key Context
+<!-- Important constraints, integrations, or decisions -->
+BRIEF_EOF
     fi
-    # Append to index
-    if [ -f "$MEMORY_BANK/stories/index.md" ]; then
-        echo "| $TODAY | Origin: $PROJECT_NAME | origin |" >> "$MEMORY_BANK/stories/index.md"
-    fi
-    echo "  ✓ stories/${TODAY}-origin.md"
+    echo "  ✓ brief.md"
 else
-    echo "  ⏭ stories/origin (exists)"
+    echo "  ⏭ brief.md (exists)"
 fi
 
 # ============================================
@@ -94,16 +71,10 @@ if [ ! -f "$CLAUDE_DIR/CLAUDE.md" ]; then
 <!-- TODO: Add project-specific boundaries -->
 
 ## Memory Bank
-Auto-loaded at session start (brief, context, task, tech). Full files in \`.memory-bank/\`:
+Auto-loaded at session start. Full files in \`.memory-bank/\`:
 - \`brief.md\` — Project goals and scope
-- \`product.md\` — Product context and constraints
-- \`context.md\` — Recent changes and carry-forward notes
-- \`task.md\` — Active tasks and sprint focus
-- \`architecture.md\` — System architecture
-- \`tech.md\` — Tech stack and tooling
-- \`stories/\` — Dev stories for devlogs (not auto-loaded, use \`/story\` to capture)
 
-After major tasks or architectural changes, update relevant Memory Bank files.
+After major tasks, update brief.md if project direction has changed.
 
 ## Security
 **CRITICAL**: NEVER commit, push, or expose secrets, API keys, tokens, or credentials to version control.
@@ -180,17 +151,11 @@ echo "✅ Bootstrap complete!"
 echo ""
 echo "📂 Structure:"
 echo "   $PROJECT_PATH/"
-echo "   ├── .memory-bank/          (project knowledge)"
-echo "   │   ├── brief.md"
-echo "   │   ├── product.md"
-echo "   │   ├── context.md"
-echo "   │   ├── task.md"
-echo "   │   ├── architecture.md"
-echo "   │   ├── tech.md"
-echo "   │   └── stories/          (dev stories — not auto-loaded)"
-echo "   ├── .claude/               (Claude Code)"
-echo "   │   ├── CLAUDE.md          (project context + values + memory bank)"
-echo "   │   ├── settings.json      (project-specific hooks only)"
+echo "   ├── .memory-bank/"
+echo "   │   └── brief.md           (project identity — auto-loaded at session start)"
+echo "   ├── .claude/"
+echo "   │   ├── CLAUDE.md          (project instructions + rules)"
+echo "   │   ├── settings.json      (project-specific settings)"
 echo "   │   └── skills/            (add SKILL.md per workflow)"
 echo ""
 echo "📝 Next steps:"

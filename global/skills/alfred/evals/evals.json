@@ -1,0 +1,91 @@
+{
+  "skill_name": "alfred",
+  "evals": [
+    {
+      "id": 1,
+      "name": "travel-event",
+      "prompt": "/alfred 29/03 đi đám cưới bạn ở Đồng Nai, khởi hành 7h sáng",
+      "expected_output": "Full day schedule with: travel event added, ăn sáng moved earlier, đón vợ flagged as conflict, prep task on 28/03, no deep work, INTJ recovery buffer, science notes explaining why",
+      "assertions": [
+        {"name": "reads_gcal", "type": "tool_call", "description": "Called gcal_list_events to read existing schedule"},
+        {"name": "reads_todoist", "type": "tool_call", "description": "Called find-tasks-by-date to read tasks"},
+        {"name": "proposal_format", "type": "output_contains", "description": "Output contains the proposal format with calendar changes section", "pattern": "Calendar changes"},
+        {"name": "travel_day_no_deep_work", "type": "output_contains", "description": "Recognizes travel day = no deep work", "pattern": "no deep work|không deep work|travel day"},
+        {"name": "conflict_detection", "type": "output_contains", "description": "Flags đón vợ as conflict", "pattern": "CONFLICT|conflict|đón vợ"},
+        {"name": "asks_approval", "type": "tool_call", "description": "Uses AskUserQuestion for approval gate"},
+        {"name": "no_execution_before_approval", "type": "negative", "description": "Does NOT call gcal_create_event or gcal_update_event before approval"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "early-wake",
+      "prompt": "/alfred ngày mai vợ đi làm 5h sáng",
+      "expected_output": "Schedule with 4:30 wake, compressed day, conservative mode warning, cold brew window noted, bed anchored to 21:00 sleep gate, max 1-2 deep blocks",
+      "assertions": [
+        {"name": "reads_gcal", "type": "tool_call", "description": "Called gcal_list_events"},
+        {"name": "early_wake_warning", "type": "output_contains", "description": "Warns about early wake / sleep debt", "pattern": "early wake|sleep debt|sớm|conservative"},
+        {"name": "sleep_gate_21", "type": "output_contains", "description": "Anchors bedtime to 21:00 sleep gate", "pattern": "21:00|sleep gate|21h"},
+        {"name": "cold_brew_timing", "type": "output_contains", "description": "Mentions cold brew first sip timing adjusted", "pattern": "cold brew|coffee|caffeine"},
+        {"name": "conservative_blocks", "type": "output_contains", "description": "Limits deep work to 1-2 blocks", "pattern": "1-2|1 deep|2 deep|conservative|max 1|max 2"},
+        {"name": "science_notes", "type": "output_contains", "description": "Includes science notes section", "pattern": "Science notes|science"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "optimize-day",
+      "prompt": "/alfred optimize tomorrow",
+      "expected_output": "Reads existing schedule + tasks, maps tasks to energy windows, suggests reading slot, shows full optimized schedule with science reasoning, materializes via Todoist dueString times and [alfred] calendar blocks",
+      "assertions": [
+        {"name": "reads_gcal", "type": "tool_call", "description": "Called gcal_list_events"},
+        {"name": "reads_todoist", "type": "tool_call", "description": "Called find-tasks-by-date"},
+        {"name": "energy_mapping", "type": "output_contains", "description": "Maps tasks to energy windows via labels", "pattern": "high_energy.*medium_energy|high_energy.*low_energy|PEAK.*TRANSITION|Income.*Growth"},
+        {"name": "proposal_format", "type": "output_contains", "description": "Shows time-based schedule with emojis", "pattern": "⏰"},
+        {"name": "reading_suggestion", "type": "output_contains", "description": "Suggests a reading slot", "pattern": "đọc sách|reading|📖"},
+        {"name": "materialization", "type": "output_contains", "description": "Shows materialization via Todoist time or [alfred] calendar blocks", "pattern": "TIME:|\\[alfred\\]|dueString|materialized"}
+      ]
+    },
+    {
+      "id": 4,
+      "name": "add-quest-today",
+      "prompt": "/alfred add task build portfolio site",
+      "expected_output": "Classifies as Main/Income with high_energy label, creates Todoist task, updates task with timed dueString for today, places in peak energy window, shows both Todoist + Calendar changes",
+      "assertions": [
+        {"name": "classifies_income", "type": "output_contains", "description": "Classifies task into Income section", "pattern": "Income|💰"},
+        {"name": "labels_high_energy", "type": "output_contains", "description": "Applies high_energy label", "pattern": "high_energy"},
+        {"name": "creates_todoist", "type": "tool_call", "description": "Called add-tasks to create the Todoist task"},
+        {"name": "reads_gcal_for_placement", "type": "tool_call", "description": "Called gcal_list_events to find optimal time slot"},
+        {"name": "sets_timed_duestring", "type": "tool_call", "description": "Called update-tasks to set timed dueString for materialization"},
+        {"name": "peak_window_placement", "type": "output_contains", "description": "Places task in peak energy window", "pattern": "PEAK|peak|07:|08:|09:|10:|W\\+1\\.5|W\\+3|W\\+4"},
+        {"name": "shows_materialization", "type": "output_contains", "description": "Shows both Todoist creation and calendar materialization", "pattern": "Materialized|materialized|⏰|calendar"}
+      ]
+    },
+    {
+      "id": 5,
+      "name": "re-optimize-existing",
+      "prompt": "/alfred optimize tomorrow (assume [alfred] blocks and timed Todoist tasks already exist from a previous optimize run)",
+      "expected_output": "Identifies existing [alfred] blocks, proposes updates (MOVE) not delete+recreate, updates Todoist dueString times",
+      "assertions": [
+        {"name": "reads_gcal", "type": "tool_call", "description": "Called gcal_list_events"},
+        {"name": "reads_todoist", "type": "tool_call", "description": "Called find-tasks-by-date"},
+        {"name": "identifies_alfred_blocks", "type": "output_contains", "description": "Identifies existing [alfred] blocks", "pattern": "\\[alfred\\]|existing.*block|previous.*block|already.*scheduled"},
+        {"name": "updates_not_recreates", "type": "output_contains", "description": "Proposes MOVE/update for existing events", "pattern": "MOVE|✏️|update.*event|gcal_update_event"},
+        {"name": "todoist_time_updates", "type": "output_contains", "description": "Updates Todoist dueString with times", "pattern": "TIME:|dueString|at \\d{2}:\\d{2}"},
+        {"name": "asks_approval", "type": "tool_call", "description": "Uses AskUserQuestion for approval"}
+      ]
+    },
+    {
+      "id": 6,
+      "name": "quest-future-date",
+      "prompt": "/alfred thêm task review CCNA material, due next week",
+      "expected_output": "Classifies as Main/Growth with high_energy label, creates Todoist task with due date next week, does NOT set timed dueString, no calendar materialization",
+      "assertions": [
+        {"name": "classifies_growth", "type": "output_contains", "description": "Classifies task into Growth section", "pattern": "Growth|🧠"},
+        {"name": "labels_high_energy", "type": "output_contains", "description": "Applies high_energy label", "pattern": "high_energy"},
+        {"name": "creates_todoist", "type": "tool_call", "description": "Called add-tasks to create the Todoist task"},
+        {"name": "future_due_date", "type": "output_contains", "description": "Sets due date to next week", "pattern": "next week|tuần sau"},
+        {"name": "no_time_placement", "type": "output_contains", "description": "Does not materialize to calendar (future date)", "pattern": "—|no materialization|Todoist only|không"},
+        {"name": "no_gcal_create", "type": "negative", "description": "Does NOT call gcal_create_event for future-dated tasks"}
+      ]
+    }
+  ]
+}

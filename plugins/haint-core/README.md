@@ -1,30 +1,21 @@
 # haint-core
 
-Core Claude Code plugin: hooks (Memory Bank, git safety, notifications) + auto-trigger skills (tempo, quest).
-
-Manual-only skills (ship, fix-issue, review, story, track, reschedule-quest, skills-dashboard, project-status) moved to `~/.claude/skills/` with `disable-model-invocation: true` for token savings.
+Core Claude Code plugin: hooks (session context, git safety, notifications).
 
 ## Hooks
 
-- **SessionStart**: Shows git branch + recent commits, auto-loads all `.memory-bank/*.md` files
+- **SessionStart**: Shows git branch + recent commits, loads `.memory-bank/brief.md` (project identity)
 - **PreToolUse (Bash)**: Two-tier safety — `deny` for catastrophic commands (`rm -rf /`, `rm -rf ~`), `ask` (permission dialog) for risky operations (`git push --force`, `git reset --hard`, `git clean -fd`, sensitive file commits)
 - **Notification**: Desktop notification via `notify-send` when Claude needs attention
 
-## Plugin Skills (auto-trigger OK)
+## Memory Architecture
 
-- **tempo**: Daily dashboard — Todoist quests + Google Calendar events + evaluation. Usage: `/tempo [today|tomorrow|weekly]`
-- **quest**: Add or update Todoist tasks with smart classification into quest system. Usage: `/quest thêm/sửa ...`
-
-## User-Level Skills (`~/.claude/skills/`, disable-model-invocation)
-
-- **ship**: `/ship [commit message]`
-- **fix-issue**: `/fix-issue <issue-number>`
-- **review**: `/review [HEAD~N|branch|hash]`
-- **story**: `/story`
-- **track**: `/track [start|stop|today]`
-- **reschedule-quest**: `/reschedule-quest [task]`
-- **skills-dashboard**: `/skills-dashboard [skill-name]`
-- **project-status**: `/project-status`
+Session context is layered:
+1. **Global CLAUDE.md** — behavioral instructions + `@import` for identity/career context
+2. **Project CLAUDE.md** — project-specific instructions
+3. **brief.md** — project identity (loaded by this plugin's SessionStart hook)
+4. **Auto-memory (MEMORY.md)** — session learnings (managed by Claude Code)
+5. **Engram** — cross-project dynamic memory (MCP plugin)
 
 ## Install
 

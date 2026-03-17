@@ -36,13 +36,28 @@ Categorize each source:
 
 **Always-on** (loaded every session automatically):
 
-1. `~/.claude/CLAUDE.md` — Global instructions
-2. Project CLAUDE.md — Check both `.claude/CLAUDE.md` and root `CLAUDE.md`
+1. `~/.claude/CLAUDE.md` — Global instructions. **Important: resolve `@import` directives** (see below).
+2. Project CLAUDE.md — Check both `.claude/CLAUDE.md` and root `CLAUDE.md`. Also resolve `@import` directives.
 3. `AGENTS.md` — If exists at project root
 4. Auto-memory — Find the project's memory directory under `~/.claude/projects/` and read `MEMORY.md`. The project hash is derived from the working directory path (replace `/` with `-`, strip leading `-`).
 5. Memory bank — Glob `.memory-bank/*.md` at project root. These load if a startup hook reads them (check `.claude/settings.json` and `.claude/settings.local.json` for `SessionStart` hooks).
 6. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills.
 7. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. For each enabled plugin, note it contributes skill descriptions to the always-on context.
+
+**Resolving `@import` directives in CLAUDE.md files:**
+
+CLAUDE.md files can contain `@path/to/file` directives that pull external files into context at session start. These are expanded recursively (max depth 5). The raw CLAUDE.md line count is misleading — the ACTUAL context cost is the expanded content.
+
+For each CLAUDE.md file:
+1. Grep for lines matching `^@` (import directives)
+2. For each `@path` found, resolve the path (expand `~` to home dir) and Read the target file
+3. Record: import path, target file lines, target file chars, estimated tokens
+4. Report both raw CLAUDE.md size AND expanded size (raw + all imports)
+5. Use the **expanded** size for all benchmarks and thresholds — that's what Claude actually sees
+6. In the Context Breakdown table, show each import as a sub-row indented under its parent CLAUDE.md
+7. Watch for circular imports or missing files (broken `@path` references)
+
+Example: a 87-line CLAUDE.md with 4 `@import` directives might expand to 330+ lines — the expanded number is what matters for benchmarking.
 
 **On-demand** (loaded only when needed):
 
@@ -67,7 +82,8 @@ Compare measurements against these official limits. For each check, assign a sta
 
 | Check | Threshold | Why |
 |-------|-----------|-----|
-| Each CLAUDE.md file | ≤ 200 lines | Official recommendation. Beyond this, rule adherence degrades — "if Claude keeps ignoring a rule, the file is probably too long." (code.claude.com/docs/en/memory) |
+| Each CLAUDE.md file (raw) | ≤ 200 lines | Official recommendation. Beyond this, rule adherence degrades — "if Claude keeps ignoring a rule, the file is probably too long." (code.claude.com/docs/en/memory) |
+| Each CLAUDE.md file (expanded, with @imports) | ≤ 500 lines | After resolving `@path` imports, the expanded content is what Claude actually sees. Files with heavy @imports may appear small but load hundreds of lines. Report both raw and expanded. |
 | MEMORY.md | ≤ 200 lines | Hard cutoff — only first 200 lines auto-load at session start. Content beyond line 200 is invisible unless explicitly read. (code.claude.com/docs/en/memory) |
 | MCP servers (global + project) | ≤ 3 total | Each server adds tools to the deferred list (~50 tok/tool baseline). When tools are loaded via ToolSearch, full schemas add ~200-400 tok/tool. 13 servers documented at 82K tokens loaded (41% of window). (github.com/anthropics/claude-code/issues/3406) |
 | User-controlled always-on | ≤ 12K tokens | Separate from the fixed system prompt. User-controlled context (CLAUDE.md + memory + skill descriptions + MCP definitions) should leave 150K+ working space. A baseline of 24% window usage is acceptable for short/medium sessions — the real problem is accumulation: each turn adds conversation history, tool results, and file reads on top. |
@@ -82,10 +98,12 @@ Cross-reference the measured data for specific waste patterns:
 
 **3a. Duplication across layers**
 
-Read the content of all always-on files. Look for the same information appearing in multiple places — for example:
+Read the content of all always-on files (including @import-expanded content). Look for the same information appearing in multiple places — for example:
 - Pipeline commands in both MEMORY.md and architecture docs
 - Tool gotchas in both tech docs and MEMORY.md
 - Project description in both CLAUDE.md and AGENTS.md and brief.md
+- **@import overlap**: A file imported via `@path` in global CLAUDE.md that is ALSO loaded as project-level auto-memory (e.g., a memory file imported globally AND loaded by the project's MEMORY.md system). This is double-loading — the same content appears twice in context.
+- **Cross-layer import overlap**: Profile files imported into CLAUDE.md that duplicate summaries already written inline in the same file or in MEMORY.md
 
 For each duplication found, note which files contain it and recommend keeping it in exactly one canonical location.
 
@@ -220,8 +238,12 @@ Determine the project memory directory — it's under `~/.claude/projects/` with
   "project": "{project_name}",
   "total_always_on_tokens": {N},
   "breakdown": {
-    "global_claude_md": {N},
-    "project_claude_md": {N},
+    "global_claude_md_raw": {N},
+    "global_claude_md_expanded": {N},
+    "global_claude_md_imports": ["path1", "path2"],
+    "project_claude_md_raw": {N},
+    "project_claude_md_expanded": {N},
+    "project_claude_md_imports": ["path1"],
     "agents_md": {N},
     "memory_md": {N},
     "memory_bank": {N},
