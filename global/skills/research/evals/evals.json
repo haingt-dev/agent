@@ -1,0 +1,26 @@
+{
+  "skill_name": "research",
+  "evals": [
+    {
+      "id": 0,
+      "name": "investigate-mcp-auth",
+      "prompt": "research best practices for MCP server authentication",
+      "expected_output": "Structured decision brief with key findings from web + docs, profile fit section referencing roadmap/brick, clear recommendation, sources list",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "compare-bun-node",
+      "prompt": "research Bun vs Node.js for building MCP servers",
+      "expected_output": "Comparison table with dimensions (performance, ecosystem, learning curve, ecosystem fit), clear winner verdict, profile fit section",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "validate-remotion",
+      "prompt": "research validate: using Remotion for game trailer production as a service",
+      "expected_output": "Failure modes section with specific risks, confidence rating (HIGH/MEDIUM/LOW), adversarial analysis, profile fit against Brick D",
+      "files": []
+    }
+  ]
+}

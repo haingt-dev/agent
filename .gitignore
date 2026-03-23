@@ -7,6 +7,7 @@
 .claude/plans/
 
 # Personal configuration (never commit)
+.env
 global/CLAUDE.md
 memories/
 

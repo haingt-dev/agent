@@ -47,12 +47,6 @@
         "path": "/home/haint/Projects/agent"
       }
     },
-    "anthropic-agent-skills": {
-      "source": {
-        "source": "github",
-        "repo": "anthropics/skills"
-      }
-    },
     "engram": {
       "source": {
         "source": "github",

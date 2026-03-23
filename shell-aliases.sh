@@ -3,6 +3,9 @@
 # Source this file in your ~/.zshrc or ~/.bashrc:
 # source ~/Projects/agent/shell-aliases.sh
 
+# Load local env (not committed)
+[ -f "$(dirname "${BASH_SOURCE[0]:-$0}")/.env" ] && source "$(dirname "${BASH_SOURCE[0]:-$0}")/.env"
+
 # ============================================
 # AGENT GLOBAL HUB NAVIGATION
 # ============================================
@@ -187,4 +190,5 @@ fi
 if [ -z "$AG_ALIASES_LOADED" ]; then
     export AG_ALIASES_LOADED=1
     echo "✅ Agent Global Hub aliases loaded! Type 'ag-help' for commands."
+    echo "📱 Remote: ssh haint@${AG_REMOTE_IP:-<set AG_REMOTE_IP>} | tmux new -s work | tmux attach -t work"
 fi

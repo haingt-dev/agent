@@ -133,30 +133,6 @@
       ],
       "notes": "Stop hook runs gdformat on modified .gd files."
     },
-    "My_CVs": {
-      "path": "~/Projects/My_CVs",
-      "type": "app",
-      "status": "archived",
-      "bootstrapped": true,
-      "summary": "CV/resume management — absorbed into digital-identity/cv/",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [],
-      "notes": "Absorbed into digital-identity. Original directory kept as reference."
-    },
-    "HaiLazy": {
-      "path": "~/Projects/HaiLazy",
-      "type": "app",
-      "status": "archived",
-      "bootstrapped": true,
-      "summary": "Personal blog (Hugo 2020) — absorbed into digital-identity/reference/",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [],
-      "notes": "Absorbed into digital-identity. Original directory kept as reference."
-    },
     "workstation-setup": {
       "path": "~/Projects/workstation-setup",
       "type": "infra",
