@@ -25,7 +25,7 @@
       }]
     }],
     "PostToolUse": [{
-      "matcher": "WebSearch|WebFetch",
+      "matcher": "WebSearch|WebFetch|mcp__claude_ai_Context7__query-docs",
       "hooks": [{
         "type": "command",
         "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use.sh",

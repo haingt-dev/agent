@@ -28,21 +28,29 @@ def get_hook_input() -> dict | None:
         return None
 
 
+def _get_tool_result(data: dict) -> str:
+    """Extract tool result text, handling both string and object formats."""
+    for field in ("tool_result", "tool_response"):
+        val = data.get(field)
+        if val:
+            return val if isinstance(val, str) else json.dumps(val, ensure_ascii=False)
+    return ""
+
+
 def extract_search_content(data: dict) -> tuple[str, str] | None:
-    """Extract saveable content from WebSearch/WebFetch tool result.
+    """Extract saveable content from research tool results.
 
     Returns (content_to_save, tool_type) or None if nothing worth saving.
     """
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {})
-    tool_result = data.get("tool_result", "")
+    tool_result = _get_tool_result(data)
 
-    if not tool_result or not isinstance(tool_result, str):
+    if not tool_result:
         return None
 
     if tool_name == "WebSearch":
         query = tool_input.get("query", "unknown query")
-        # Truncate result to key content
         content = f"Web search: \"{query}\"\n{tool_result[:MAX_TOTAL_CHARS]}"
         return content, "web-search"
 
@@ -50,6 +58,12 @@ def extract_search_content(data: dict) -> tuple[str, str] | None:
         url = tool_input.get("url", "unknown URL")
         content = f"Web fetch: {url}\n{tool_result[:MAX_TOTAL_CHARS]}"
         return content, "web-fetch"
+
+    elif tool_name == "mcp__claude_ai_Context7__query-docs":
+        library_id = tool_input.get("libraryId", "unknown")
+        topic = tool_input.get("topic", "unknown topic")
+        content = f"Context7 docs: {library_id} — {topic}\n{tool_result[:MAX_TOTAL_CHARS]}"
+        return content, "context7"
 
     return None
 
