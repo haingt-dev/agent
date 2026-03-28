@@ -497,6 +497,25 @@ def _detect_project(transcript_path: str | None) -> str | None:
     return None
 
 
+def _reset_prompt_cache(transcript_path: str | None) -> None:
+    """Reset prompt-context dedup cache for this session.
+
+    Compact wipes all system-reminders from context window, so dedup IDs,
+    token caps, and tool state must reset to allow re-injection.
+
+    Cache file is keyed by md5(cwd)[:8]. Reconstruct cwd from project name
+    since hook cwd != session cwd.
+    """
+    import hashlib
+    project = _detect_project(transcript_path)
+    if not project:
+        return
+    session_cwd = str(Path.home() / "Projects" / project)
+    cwd_hash = hashlib.md5(session_cwd.encode()).hexdigest()[:8]
+    cache_file = Path(f"/tmp/brain-prompt-ctx-{cwd_hash}.json")
+    cache_file.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     hook_input = get_hook_input()
     transcript_path = hook_input.get("transcript_path") if hook_input else None
@@ -544,7 +563,10 @@ if __name__ == "__main__":
     # Step 5: Save to brain
     saved = save_to_brain(snapshot, project, counts) if snapshot else False
 
-    # Step 6: Output
+    # Step 6: Reset prompt-context cache (compact wipes system-reminders)
+    _reset_prompt_cache(transcript_path)
+
+    # Step 7: Output
     if saved:
         print(format_output(counts, unsaved_technical, len(messages)))
     else:

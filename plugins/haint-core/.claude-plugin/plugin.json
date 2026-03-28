@@ -1,6 +1,6 @@
 {
   "name": "haint-core",
-  "description": "Core hooks only — Memory Bank injection, git safety, desktop notifications. Skills moved to project-level.",
-  "version": "3.4.0",
+  "description": "Core hooks — brain-powered memory injection, Semantic Toolbox, safety, entity extraction. Skills moved to project-level.",
+  "version": "3.5.0",
   "author": { "name": "Hai" }
 }

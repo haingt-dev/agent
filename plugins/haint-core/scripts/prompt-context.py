@@ -8,13 +8,22 @@ Dedup: tracks injected memory IDs in /tmp cache file. Only injects NEW
 memories not already in the conversation's context window. Prevents
 duplicate system-reminders accumulating tokens across prompts.
 
+Over-fetch + post-filter dedup: searches return more results than needed
+(FETCH_K > MAX_RESULTS), then dedup filters already-seen IDs, then top-K
+selects from remaining. This ensures deduped slots get filled by next-best
+results instead of being wasted.
+
+Token cap: tracks cumulative injected chars across session. Stops injecting
+when budget (MAX_INJECTED_CHARS) is exhausted, preventing context bloat
+in long conversations. Resets with cache TTL (2 hours).
+
 Phase 1: Hybrid search (FTS5 + vector RRF) for general memories
   - Project-scoped: (project = ? OR project IS NULL)
   - Type-weighted: decisions/discoveries/patterns rank before sessions
-  - Max 3 results
+  - Over-fetch 8, output max 3
 
 Phase 2: Vector search for Semantic Toolbox (type='tool' only)
-  - Max 5 results
+  - Over-fetch 10, output max 5
 
 Returns hookSpecificOutput JSON with additionalContext for Claude's context window.
 """
@@ -33,12 +42,18 @@ DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
 BRAIN_ENV = Path.home() / "Projects" / "agent" / "mcp" / "haingt-brain" / ".env"
 
 # General memory config
-MAX_GENERAL_RESULTS = 3
+FETCH_K_GENERAL = 8  # over-fetch to compensate for dedup filtering
+MAX_GENERAL_RESULTS = 3  # max results after dedup
 MAX_CONTENT_LEN = 200
 MIN_PROMPT_LENGTH = 10
 
 # Tool search config
-MAX_TOOL_RESULTS = 5
+FETCH_K_TOOLS = 10  # over-fetch for dedup-free re-ranking
+MAX_TOOL_RESULTS = 3  # top-3 tools per prompt
+
+# Token budget caps
+MAX_INJECTED_CHARS = 3000  # ~750 tokens, general memories across session
+MAX_TOOL_INJECTED_CHARS = 6000  # ~1500 tokens, safety net for tool injections
 
 # Embedding config
 EMBED_MODEL = "text-embedding-3-large"
@@ -156,8 +171,29 @@ def load_context_keywords() -> list[str]:
     return _load_cache().get("keywords", [])
 
 
-def save_cache(new_ids: set[str], current_prompt: str) -> None:
-    """Save injected IDs + extract and accumulate keywords from current prompt."""
+def load_injected_chars() -> int:
+    """Load total injected chars from cache."""
+    return _load_cache().get("total_chars", 0)
+
+
+def load_last_tools() -> list[str]:
+    """Load last injected tool names for skip-if-unchanged."""
+    return _load_cache().get("last_tools", [])
+
+
+def load_tool_chars() -> int:
+    """Load total tool injected chars from cache."""
+    return _load_cache().get("tool_chars", 0)
+
+
+def save_cache(
+    new_ids: set[str],
+    current_prompt: str,
+    new_chars: int = 0,
+    tool_names: list[str] | None = None,
+    new_tool_chars: int = 0,
+) -> None:
+    """Save injected IDs + keywords + memory chars + tool state."""
     path = _cache_path()
     try:
         cache = _load_cache()
@@ -165,6 +201,11 @@ def save_cache(new_ids: set[str], current_prompt: str) -> None:
         all_ids = set(cache.get("ids", [])) | new_ids
         if len(all_ids) > CACHE_MAX_IDS:
             all_ids = set(list(all_ids)[-CACHE_MAX_IDS:])
+        # Accumulate total injected chars (memories only)
+        total_chars = cache.get("total_chars", 0) + new_chars
+        # Tool state
+        last_tools = tool_names if tool_names is not None else cache.get("last_tools", [])
+        tool_chars = cache.get("tool_chars", 0) + new_tool_chars
         # Extract and accumulate keywords (deduped, capped)
         existing_kw = cache.get("keywords", [])
         new_kw = _extract_words(current_prompt)
@@ -179,6 +220,9 @@ def save_cache(new_ids: set[str], current_prompt: str) -> None:
         path.write_text(json.dumps({
             "ids": list(all_ids),
             "keywords": merged,
+            "total_chars": total_chars,
+            "last_tools": last_tools,
+            "tool_chars": tool_chars,
             "ts": time.time(),
         }))
     except Exception:
@@ -315,7 +359,7 @@ def search_general_hybrid(
         fts_results.sort(key=lambda x: -x["score"])
         return [
             {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"]}
-            for r in fts_results[:MAX_GENERAL_RESULTS]
+            for r in fts_results[:FETCH_K_GENERAL]
         ]
 
     vec_results = _vec_search_general(conn, embedding, project)
@@ -350,7 +394,7 @@ def search_general_hybrid(
     ranked = sorted(scores.values(), key=lambda x: -x["score"])
     return [
         {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"]}
-        for r in ranked[:MAX_GENERAL_RESULTS]
+        for r in ranked[:FETCH_K_GENERAL]
     ]
 
 
@@ -375,7 +419,7 @@ def search_tools_vector(
             WHERE m.type = 'tool'
             ORDER BY v.distance
             LIMIT :limit""",
-            {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "limit": MAX_TOOL_RESULTS},
+            {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "limit": FETCH_K_TOOLS},
         ).fetchall()
 
         results = []
@@ -405,8 +449,11 @@ if __name__ == "__main__":
     project = detect_project()
     injected = load_injected_ids()
     context_kw = load_context_keywords()
+    budget_used = load_injected_chars()
+    budget_remaining = max(0, MAX_INJECTED_CHARS - budget_used)
     sections = []
     new_ids: set[str] = set()
+    new_chars = 0
 
     # Build combined query from current prompt + accumulated keywords
     combined = build_combined_query(stripped, context_kw)
@@ -419,28 +466,46 @@ if __name__ == "__main__":
             embedding = embed_prompt(combined, api_key)
 
     conn = connect_db(need_vec=(embedding is not None))
-    if conn:
-        # Phase 1: General memories — hybrid FTS5 + vector RRF
+    if conn and budget_remaining > 0:
+        # Phase 1: General memories — over-fetch, dedup, top-K, token cap
         general = search_general_hybrid(conn, combined, embedding, project)
         new_general = [r for r in general if r["id"] not in injected]
-        if new_general:
-            lines = [f"- [{r['type']}] {r['content']}" for r in new_general]
+        new_general = new_general[:MAX_GENERAL_RESULTS]  # top-K after dedup
+        # Apply token cap
+        capped_general = []
+        for r in new_general:
+            entry_len = len(r["content"]) + len(r["type"]) + 10  # overhead
+            if new_chars + entry_len > budget_remaining:
+                break
+            capped_general.append(r)
+            new_chars += entry_len
+        if capped_general:
+            lines = [f"- [{r['type']}] {r['content']}" for r in capped_general]
             sections.append("Brain context:\n" + "\n".join(lines))
-            new_ids.update(r["id"] for r in new_general)
+            new_ids.update(r["id"] for r in capped_general)
 
-        # Phase 2: Semantic Toolbox — vector search for relevant tools
+        # Phase 2: Semantic Toolbox — fresh search, skip-if-unchanged, tool cap
+        # Tools refresh per-prompt (no dedup), but skip injection when results identical
+        tool_names_to_save = None
+        new_tool_chars = 0
         if embedding is not None:
+            prev_tools = load_last_tools()
+            tool_budget_used = load_tool_chars()
             tools = search_tools_vector(conn, embedding)
-            new_tools = [t for t in tools if t["id"] not in injected]
-            if new_tools:
-                lines = [f"- {t['name']}: {t['content']}" for t in new_tools]
-                sections.append("Relevant tools:\n" + "\n".join(lines))
-                new_ids.update(t["id"] for t in new_tools)
+            tools = tools[:MAX_TOOL_RESULTS]
+            current_tool_names = [t["name"] for t in tools]
+            # Skip if same tools as last prompt (avoid redundant system-reminders)
+            if current_tool_names != prev_tools and tools:
+                tool_text = "\n".join(f"- {t['name']}: {t['content']}" for t in tools)
+                new_tool_chars = len(tool_text)
+                if tool_budget_used + new_tool_chars <= MAX_TOOL_INJECTED_CHARS:
+                    sections.append("Relevant tools:\n" + tool_text)
+            tool_names_to_save = current_tool_names
 
         conn.close()
 
-    # Save IDs + current prompt to cache (always save prompt for multi-turn)
-    save_cache(new_ids, stripped)
+    # Save IDs + prompt + chars + tool state to cache
+    save_cache(new_ids, stripped, new_chars, tool_names_to_save, new_tool_chars)
 
     if not sections:
         sys.exit(0)

@@ -1,6 +1,6 @@
 # haingt-brain — Architecture Document
 
-> Last updated: 2026-03-27
+> Last updated: 2026-03-28
 > Status: Production (single-user, daily use)
 > Origin: Applied concepts from DeepLearning.AI "Building Memory-Aware Agents" course
 
@@ -39,7 +39,7 @@
 │                          │    │  brain_forget            │
 │ UserPromptSubmit         │    │  brain_update            │
 │  └─ prompt-context.py    │    │  brain_tools             │
-│     (FTS5 query)         │    │  brain_session           │
+│     (hybrid RRF query)   │    │  brain_session           │
 │                          │    │  brain_graph             │
 │ PostToolUse (Web*)       │    │                          │
 │  └─ search-and-store.py  │    │ Embeddings (OpenAI)      │
@@ -244,21 +244,33 @@ ORDER BY s.rrf_score DESC LIMIT :k
 ### UserPromptSubmit → `prompt-context.py`
 - **Trigger**: Every user message (>10 chars, not slash commands)
 - **Input**: `{"prompt": "user's message"}`
-- **Output**: `{"additionalContext": "Brain context: [type] content..."}` or empty
-- **Mechanism**: FTS5-only query (no embedding API), top 2 results, 200 chars each
-- **Performance**: <50ms (no network call)
+- **Output**: `{"additionalContext": "Brain context: ...\n\nRelevant tools: ..."}` or empty
+- **Architecture**: Embed once → search twice (general hybrid + tool vector)
+- **Phase 1 — General memories**: Hybrid FTS5 + vector RRF, project-scoped, type-weighted
+  - Over-fetch 8 → dedup filter (skip already-injected) → top 3
+  - Token cap: `MAX_INJECTED_CHARS = 3000` (~750 tokens) across session
+- **Phase 2 — Semantic Toolbox**: Vector-only search for type='tool'
+  - Fresh top-3 every prompt (no dedup — tools are per-prompt relevance)
+  - Skip-if-unchanged: same tool names as last prompt → skip injection
+  - Token cap: `MAX_TOOL_INJECTED_CHARS = 6000` safety net
+- **Dedup cache**: `/tmp/brain-prompt-ctx-{md5(cwd)[:8]}.json`
+  - Tracks: injected IDs, accumulated keywords, memory chars, tool state
+  - TTL: 2 hours. Also reset by PreCompact (compact wipes system-reminders)
+- **Multi-turn context**: Accumulates keywords from recent prompts → richer embedding queries
+- **Performance**: ~150ms (one embedding API call + two DB queries)
 
 ### PostToolUse → `post-tool-use.sh` + `search-and-store.py`
-- **Trigger**: After WebSearch or WebFetch completes
+- **Trigger**: After WebSearch, WebFetch, or Context7 query-docs completes
 - **Input**: `{"tool_name": "...", "tool_input": {...}, "tool_result": "..."}`
 - **Action**: Parse result → write to brain.db as type=discovery, tags=[tool_type, "auto-captured"]
-- **Embedding**: Attempted (graceful fail → FTS-only is still useful)
+- **Embedding**: Attempted via brain venv Python (graceful fail → FTS-only is still useful)
 - **Output**: Reminder to brain_save for deeper analysis
 
 ### PreCompact → `pre-compact.sh` + `pre-compact-snapshot.py`
 - **Trigger**: Before context compaction
 - **Input**: `{"transcript_path": "/path/to/transcript.jsonl"}`
-- **Action**: Parse last 20 user+assistant messages → build snapshot (max 2000 chars) → write to brain.db as type=session, tags=["pre-compact", "auto-snapshot"]
+- **Action**: Parse last 20 user+assistant messages → 4-category structured extraction (technical, emotional, entities, actions) → write to brain.db as type=session, format=structured-v1
+- **Cache reset**: Deletes prompt-context dedup cache for this session (compact wipes system-reminders → dedup/caps must reset to allow re-injection)
 - **No embedding**: FTS-only (hook must stay fast)
 - **Why**: Prevents context loss on /compact — brain-context.py re-injects on next SessionStart
 
@@ -386,10 +398,18 @@ Session starts
 ```
 User types message
   → prompt-context.py receives {"prompt": "..."}
-    → sqlite3.connect(brain.db)          [direct read]
-    → FTS5 MATCH (words from prompt)
-    → top 2 results (exclude type=tool)
-    → return {"additionalContext": "Brain context: ..."}
+    → load dedup cache (/tmp/brain-prompt-ctx-{hash}.json)
+    → check token budgets (memory cap 3000, tool cap 6000)
+    → embed prompt via OpenAI API (one call, reused for both phases)
+    → Phase 1: General memories
+      → hybrid FTS5 + vector RRF (project-scoped, type-weighted)
+      → over-fetch 8 → dedup filter → top 3 → token cap
+    → Phase 2: Semantic Toolbox
+      → vector search type='tool' → top 3
+      → skip if same tools as last prompt (skip-if-unchanged)
+      → tool token cap
+    → save cache (IDs, keywords, chars, tool state)
+    → return {"additionalContext": "Brain context: ...\n\nRelevant tools: ..."}
   → Claude sees additionalContext in its input
 ```
 
@@ -399,15 +419,19 @@ Context approaching limit → /compact triggered
   → pre-compact.sh receives {"transcript_path": "..."}
     → pre-compact-snapshot.py
       → read transcript JSONL
-      → extract last 20 user+assistant messages
-      → build snapshot (max 2000 chars)
+      → 4-category structured extraction:
+        technical (decisions, code patterns)
+        emotional (frustration, satisfaction signals)
+        entities (projects, skills, technologies)
+        actions (TODOs, next steps)
       → sqlite3.connect(brain.db)        [direct write]
-      → INSERT memories (type=session, tags=pre-compact)
+      → INSERT memories (type=session, format=structured-v1)
       → INSERT memory_fts
       → COMMIT
+      → reset prompt-context cache (dedup/caps/tool state)
   → print confirmation to Claude
   → compaction happens
-  → SessionStart fires again → brain-context.py re-injects
+  → next UserPromptSubmit re-injects fresh brain context + tools
 ```
 
 ## 12. File Manifest
@@ -433,14 +457,15 @@ Context approaching limit → /compact triggered
 ### Hook Scripts (`~/Projects/agent/plugins/haint-core/`)
 | File | Purpose |
 |------|---------|
-| `hooks/hooks.json` | Hook configuration (5 events, matchers, timeouts) |
+| `hooks/hooks.json` | Hook configuration (6 events, matchers, timeouts) |
 | `scripts/session-start.sh` | SessionStart: git + memory-bank + brain-context.py |
 | `scripts/brain-context.py` | Direct SQLite read → decisions, preferences, last session |
-| `scripts/prompt-context.py` | Per-prompt FTS5 query → additionalContext JSON |
+| `scripts/prompt-context.py` | Per-prompt hybrid RRF + Semantic Toolbox, dedup, token caps |
 | `scripts/post-tool-use.sh` | PostToolUse router → search-and-store.py |
-| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch results to brain.db |
+| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results to brain.db |
 | `scripts/pre-compact.sh` | PreCompact router → pre-compact-snapshot.py |
-| `scripts/pre-compact-snapshot.py` | Read transcript → snapshot → brain.db |
+| `scripts/pre-compact-snapshot.py` | 4-category structured extraction → brain.db + cache reset |
+| `scripts/entity-extract.py` | Stop hook: regex entity extraction → brain.db type=entity |
 
 ### Configuration
 | File | Purpose |
@@ -483,7 +508,11 @@ Context approaching limit → /compact triggered
 | **FTS5 unicode61 + remove_diacritics=2** | Default tokenizer silently failed Vietnamese: "sap xep" didn't match "sắp xếp". remove_diacritics=2 handles compound diacritics (ắ, ối, ưu). Confirmed via testing. |
 | **LRU cache (128) for embeddings** | Same query or content embedded multiple times per session (recall + save + consolidation). 128 entries covers typical session without memory pressure. |
 | **Direct SQLite in hooks (no MCP)** | MCP uses stdio transport — hooks can't call MCP tools. But brain.db is just a file → Python scripts read/write directly. Same pattern as brain-context.py. |
-| **FTS5-only in UserPromptSubmit hook** | Hook fires every user message. Embedding API call (~100ms) would add noticeable latency. FTS5 query: <5ms, good enough for broad recall. |
+| **Hybrid RRF in UserPromptSubmit hook** | Originally FTS5-only. Upgraded to embed-once + dual-phase search (general RRF + tool vector). One API call (~100ms) serves both phases. Needed for Semantic Toolbox and better recall quality. |
+| **Over-fetch + post-filter dedup** | Dedup was filtering AFTER top-K cut → already-seen memories blocked new ones. Now: over-fetch 8, dedup, then top 3. Standard RAG pattern. |
+| **Tool refresh per prompt (no dedup)** | Memories are cumulative context (dedup correct). Tools are per-prompt relevance — must refresh as topic shifts. Skip-if-unchanged prevents redundant system-reminders. |
+| **Token caps (memory 3000, tool 6000)** | Prevents unbounded context growth in long sessions. Memory cap tracks cumulative injection. Tool cap is safety net (skip-if-unchanged is primary throttle). |
+| **PreCompact resets prompt-context cache** | Compact wipes all system-reminders from context. Without cache reset, dedup thinks memories still injected → blocks re-injection of most relevant context. Session-scoped via md5(cwd) hash. |
 | **No embedding in PreCompact snapshot** | Hook timeout 5s. Embedding adds 100-200ms. Snapshot content is conversation fragments, not search-optimized text. FTS5 indexing is sufficient for re-discovery. |
 | **7 memory types as CHECK constraint** | Enforces data integrity at DB level. Types drive retention policy (patterns decay, others don't). Filtering by type is the most common search refinement. |
 | **O(n·k) ANN for duplicate detection** | Original O(n²) pairwise loaded all embeddings into memory. ANN uses sqlite-vec's indexed search (k=6 neighbors per memory). Scales to 1000+ without performance cliff. |
@@ -500,7 +529,7 @@ Context approaching limit → /compact triggered
 |-----------|---------|--------|
 | **No HTTP transport** | MCP uses stdio only. Hooks can't call MCP tools, must use direct SQLite. | Low — direct SQLite works. Would matter if multiple processes needed concurrent MCP access. |
 | **Pre-compact snapshot has no embedding** | Saves to FTS only, not vector store. | Medium — snapshot is discoverable via keyword search but not semantic search. Acceptable tradeoff for hook speed. |
-| **UserPromptSubmit FTS5 is broad** | OR-matching top 5 words → may return low-relevance results. | Low — worst case: slightly irrelevant additionalContext. Claude ignores if not useful. |
+| **UserPromptSubmit embedding cost** | Each user message triggers one OpenAI embedding API call (~$0.001). | Low — cost is negligible. Falls back to FTS5-only if API unavailable. |
 | **transcript_path format undocumented** | JSONL structure reverse-engineered from observation. Claude Code may change it. | Medium — pre-compact-snapshot.py could break on format change. Graceful fallback to text reminder. |
 | **Single-process embedding cache** | LRU cache is in-memory per MCP server process. Hook scripts that import embeddings.py get a separate cache. | Low — hooks rarely embed (only search-and-store). MCP server handles most embedding. |
 | **Consolidation runs synchronously** | consolidate_all() runs during brain_session("start"). If brain has 1000+ memories, this adds startup latency. | Low currently (~70 memories). Will matter at scale. |
@@ -513,7 +542,7 @@ Context approaching limit → /compact triggered
 |-------------|------------------------|--------|
 | **Add embedding to pre-compact snapshots** | When brain_recall misses relevant conversation context that was captured by pre-compact | Small — add embed_text() call in pre-compact-snapshot.py |
 | **Periodic brain.db backup** | First time any data loss concern arises, OR when brain >200 memories | Small — cron job: `cp brain.db brain.db.bak` |
-| **Stop hook for entity extraction** | When Hải notices Claude forgetting key entities across sessions despite brain system | Medium — agent hook type (Haiku subagent), extracts entities from response, writes to brain |
+| ~~**Stop hook for entity extraction**~~ | ✅ Implemented — `entity-extract.py` via Stop hook, regex-based extraction | Done |
 | **HTTP/SSE transport** | When multiple processes need simultaneous MCP access, OR when hooks need to call brain_tools() | Large — add FastAPI/uvicorn alongside stdio, dual transport |
 | **Weighted RRF (tunable k)** | When search quality noticeably degrades for specific query patterns | Small — make rrf_k configurable in brain_meta, expose via brain_session("config") |
 | **Embedding dimension reduction** | When brain.db >100MB AND storage is a concern | Small — change DIMENSIONS to 1536 or 768, re-embed all (Matryoshka supports this) |
