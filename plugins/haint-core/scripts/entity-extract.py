@@ -225,6 +225,13 @@ if __name__ == "__main__":
 
     try:
         conn = sqlite3.connect(str(DB_PATH))
+        try:
+            import sqlite_vec
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+            conn.enable_load_extension(False)
+        except (ImportError, Exception):
+            pass  # FTS-only if sqlite-vec unavailable
         conn.row_factory = sqlite3.Row
 
         new_count = 0
