@@ -13,3 +13,7 @@ memories/
 
 # Ephemeral memory artifacts
 memories/**/token-audit.json
+
+# Python
+__pycache__/
+*.pyc

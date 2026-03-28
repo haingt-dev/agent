@@ -1,11 +1,7 @@
 ---
 name: gen-image
-description: >-
-  Generate images via Gemini API from text prompts. Single image or batch.
-  Use when asked to generate, create, or make images, illustrations, concept art,
-  scene visuals, or any visual content from text descriptions. Triggers on:
-  "gen image", "generate image", "tạo ảnh", "concept art", "illustration for",
-  "scene image", "Anki card image", even when user doesn't say "gen-image" explicitly.
+disable-model-invocation: false
+description: "Generate images via Gemini API from text prompts"
 argument-hint: "<prompt-text-or-file-path> [--aspect 16:9] [--size 1K] [--model MODEL] [--output path] [--output-dir dir] [--prefix text] [--force]"
 ---
 

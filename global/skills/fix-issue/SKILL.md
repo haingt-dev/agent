@@ -2,7 +2,7 @@
 name: fix-issue
 description: "Fix a GitHub issue end-to-end — investigate, reproduce, implement, test, commit, and open PR."
 argument-hint: "[issue-number-or-url]"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Read, Grep, Glob, Write, Edit, Bash(gh *), Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest *), Bash(make *)
 ---
 

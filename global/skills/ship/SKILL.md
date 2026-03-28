@@ -2,7 +2,7 @@
 name: ship
 description: "Lint, test, review, update Memory Bank, and commit — one command to ship changes."
 argument-hint: "[commit-message]"
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest *), Bash(make *), Bash(gdformat *), Bash(gdlint *), Bash(ruff *), Read, Grep, Glob, Write, Edit
 ---
 

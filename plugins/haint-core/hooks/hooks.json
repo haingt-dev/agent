@@ -8,12 +8,44 @@
         "timeout": 15
       }]
     }],
+    "UserPromptSubmit": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/prompt-context.py",
+        "timeout": 10
+      }]
+    }],
     "PreToolUse": [{
       "matcher": "Bash",
       "hooks": [{
         "type": "command",
         "command": "${CLAUDE_PLUGIN_ROOT}/scripts/pre-tool-safety.sh",
         "timeout": 10
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "WebSearch|WebFetch",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use.sh",
+        "timeout": 10
+      }]
+    }],
+    "PreCompact": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/pre-compact.sh",
+        "timeout": 15
+      }]
+    }],
+    "Stop": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/entity-extract.py",
+        "timeout": 15
       }]
     }],
     "Notification": [{

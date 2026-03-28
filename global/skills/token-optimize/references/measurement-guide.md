@@ -15,8 +15,10 @@ For each file, record: path, line count, char count, estimated tokens (chars / 3
 3. `AGENTS.md` — If exists at project root.
 4. Auto-memory — Find the project's memory directory under `~/.claude/projects/` with the path derived from the working directory (replace `/` with `-`, strip leading `-`). Read `MEMORY.md`.
 5. Memory bank — Glob `.memory-bank/*.md` at project root. These load if a startup hook reads them — check `.claude/settings.json` and `.claude/settings.local.json` for `SessionStart` hooks.
-6. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills.
-7. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. Each enabled plugin contributes skill descriptions to always-on context.
+6. Brain files — Glob `~/.claude/brains/*.md`. For each: path, lines, chars, tokens. Note which project CLAUDE.md files @import each brain file (grep for `@~/.claude/brains/` across all CLAUDE.md files). These are always-on for every project that @imports them.
+7. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills. Note: with brain_tools Semantic Toolbox, descriptions can be minimal labels (~20-50 chars) — verbose descriptions are waste.
+8. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. Each enabled plugin contributes skill descriptions to always-on context. Scan plugin skill paths: `~/Projects/agent/plugins/*/skills/*/SKILL.md`.
+9. Hook dynamic context (estimated) — Read SessionStart hook scripts (check hooks.json or settings.json for SessionStart entries). If hooks inject context (e.g., brain-context.py reading from brain.db), estimate output size. Category: "dynamic (estimated)" — not statically measurable but impacts per-session token budget. Typical: ~300-500 tokens for brain context injection.
 
 ### Resolving `@import` directives
 
@@ -35,15 +37,15 @@ Example: an 87-line CLAUDE.md with 4 `@import` directives might expand to 330+ l
 
 ### On-demand sources (not always-on)
 
-8. `.claude/rules/*.md` — Path-scoped rules. Load only when Claude touches files matching their path patterns. Measure but categorize as on-demand.
-9. Skill bodies — Full SKILL.md content beyond frontmatter. Loaded only when a skill is invoked.
+10. `.claude/rules/*.md` — Path-scoped rules. Load only when Claude touches files matching their path patterns. Measure but categorize as on-demand.
+11. Skill bodies — Full SKILL.md content beyond frontmatter. Loaded only when a skill is invoked.
 
 ### Settings (affect context indirectly)
 
-10. `~/.claude/settings.json` — Count: permission allow rules, deny rules, ask rules, MCP server wildcards (`mcp__*` patterns), additional directories, enabled plugins.
-11. `.claude/settings.local.json` — Same analysis for project-local overrides.
-12. `.mcp.json` — Count MCP server definitions at project level.
-13. `.claudeignore` — Check if it exists. If the project has `node_modules/`, `dist/`, `build/`, or `target/` directories but no `.claudeignore`, flag it.
+12. `~/.claude/settings.json` — Count: permission allow rules, deny rules, ask rules, MCP server wildcards (`mcp__*` patterns), additional directories, enabled plugins.
+13. `.claude/settings.local.json` — Same analysis for project-local overrides.
+14. `.mcp.json` — Count MCP server definitions at project level.
+15. `.claudeignore` — Check if it exists. If the project has `node_modules/`, `dist/`, `build/`, or `target/` directories but no `.claudeignore`, flag it.
 
 ---
 
@@ -59,9 +61,10 @@ Compare measurements against these official limits. For each check, assign a sta
 | Each CLAUDE.md file (raw) | ≤ 200 lines | Official recommendation. Beyond this, rule adherence degrades — "if Claude keeps ignoring a rule, the file is probably too long." (code.claude.com/docs/en/memory) |
 | Each CLAUDE.md file (expanded, with @imports) | ≤ 500 lines | After resolving `@path` imports, the expanded content is what Claude actually sees. Files with heavy @imports may appear small but load hundreds of lines. Report both raw and expanded. |
 | MEMORY.md | ≤ 200 lines | Hard cutoff — only first 200 lines auto-load at session start. Content beyond line 200 is invisible unless explicitly read. (code.claude.com/docs/en/memory) |
-| MCP servers (global + project) | ≤ 3 total | Each server adds tools to the deferred list (~50 tok/tool baseline). When tools are loaded via ToolSearch, full schemas add ~200-400 tok/tool. 13 servers documented at 82K tokens loaded (41% of window). (github.com/anthropics/claude-code/issues/3406) |
+| MCP deferred tokens (all servers) | ≤ 4K tokens | Count all deferred tools across servers × ~50 tok/tool. Server count alone is misleading — a server with 5 deferred tools costs ~250 tok, one with 50 costs ~2,500 tok. When tools are loaded via ToolSearch, full schemas add ~200-400 tok/tool on demand. (github.com/anthropics/claude-code/issues/3406) |
+| Brain files total (`~/.claude/brains/`) | ≤ 100 lines | Brain files are always-on for every project that @imports them. Each is shared context — useful but accumulates. Keep single-concern (one brain file per domain). |
 | User-controlled always-on | ≤ 12K tokens | Separate from the fixed system prompt. User-controlled context (CLAUDE.md + memory + skill descriptions + MCP definitions) should leave 150K+ working space. A baseline of 24% window usage is acceptable for short/medium sessions — the real problem is accumulation: each turn adds conversation history, tool results, and file reads on top. |
-| All skill descriptions combined | ≤ 16,000 chars | Fallback budget for skill metadata. Beyond this, descriptions compete for context space. (code.claude.com/docs/en/skills) |
+| All skill descriptions combined | ≤ 16,000 chars | Fallback budget for skill metadata. With brain_tools Semantic Toolbox handling routing, descriptions should be minimal labels (~20-50 chars). Verbose descriptions are doubly wasteful: always-on cost + redundant with brain index. (code.claude.com/docs/en/skills) |
 | Largest always-on file | ≤ 100 lines | Files over 100 lines in always-on context likely contain content that should be in skills (on-demand ~100 tokens) or rules (path-scoped). |
 | .claudeignore exists | Yes, if project has build dirs | Prevents Claude from reading large generated files (node_modules, lock files, bundles). A single package-lock.json can be 30-80K tokens. 50-70% savings documented. |
 | Additional directories | 0-2 entries | Each adds scanning scope. Stale entries (old project paths, system dirs like /dev) waste context. |
@@ -86,6 +89,7 @@ Read the content of all always-on files (including @import-expanded content). Lo
 - Project description in both CLAUDE.md and AGENTS.md and brief.md
 - **@import overlap**: A file imported via `@path` in global CLAUDE.md that is ALSO loaded as project-level auto-memory. This is double-loading — the same content appears twice in context.
 - **Cross-layer import overlap**: Profile files imported into CLAUDE.md that duplicate summaries already written inline in the same file or in MEMORY.md
+- **Brain file ↔ CLAUDE.md overlap**: Content in `~/.claude/brains/*.md` that duplicates information in CLAUDE.md, MEMORY.md, or other always-on files. Brain files should contain only ecosystem/shared context not present elsewhere.
 
 For each duplication found, note which files contain it and recommend keeping it in exactly one canonical location.
 
@@ -117,6 +121,8 @@ Scan CLAUDE.md content for patterns that indicate material belongs elsewhere:
 - Long code examples or templates → should be in skill's bundled resources
 
 Skills are 150x more efficient than CLAUDE.md for specialized instructions: ~100 tokens per skill metadata vs 15K+ if inlined into CLAUDE.md. (Source: Skills docs, ClaudeFast metrics)
+
+Additionally, flag verbose skill descriptions (>80 chars average) when brain_tools Semantic Toolbox is available. With brain_tools handling routing via semantic search, skill descriptions only need to be labels (~20-50 chars). Verbose descriptions are doubly wasteful: always-on token cost + redundant with brain's enriched index (which includes 300 chars of body context for search).
 
 ### 3e. MCP overhead analysis
 
@@ -194,3 +200,17 @@ Check for optimization opportunities not yet used:
 Prompt caching saves 80-90% on repeated context (cache reads = 0.1× input cost). But the cache invalidates when tools, MCP servers, or model change mid-session — causing a 5× cost spike as the full prefix is reprocessed. Flag:
 - Multiple MCP server configs that might change between sessions
 - Settings that suggest frequent model switching
+
+### 3h. Brain file sprawl
+
+Brain files (`~/.claude/brains/*.md`) are shared context imported by project CLAUDE.md files. Each is always-on for every project that @imports it. Check:
+- Total brain files count. If >3 files or >200 lines total, flag as potential sprawl.
+- Each brain file should be single-concern (one domain/ecosystem). Multi-concern brain files should be split or trimmed.
+- Brain files that are @imported by only 1 project should probably be in that project's CLAUDE.md instead.
+
+### 3i. Hook dynamic overhead
+
+SessionStart hooks can inject context per-session (e.g., brain-context.py queries brain.db for recent decisions, preferences, last session summary). This context is dynamic and not statically measurable, but impacts per-session token budget.
+- Read SessionStart hook scripts to estimate injected token count. Typical range: ~300-500 tokens.
+- Flag if hook scripts read large data (e.g., querying >5 brain records, reading full files, or injecting >1K estimated tokens).
+- Note: this is an estimate for the report's Limitations section — it cannot be precisely measured without running the hook.

@@ -1,0 +1,21 @@
+[project]
+name = "haingt-brain"
+version = "0.1.0"
+description = "Memory-first MCP server with semantic search, knowledge graph, and Semantic Toolbox"
+readme = "README.md"
+authors = [
+    { name = "haint", email = "thanhhai9x98@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "openai>=1.0.0",
+    "sqlite-vec>=0.1.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.7,<0.11.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+haingt-brain = "haingt_brain.server:main"

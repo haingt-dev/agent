@@ -1,13 +1,7 @@
 ---
 name: token-optimize
-description: >-
-  Audit Claude Code token consumption across project and global context.
-  Measures all context sources, benchmarks against official limits, detects
-  duplication and waste patterns, produces actionable recommendations with
-  quantified savings. Use this skill whenever the user mentions token costs,
-  context size, wants to optimize their Claude Code setup, or complains about
-  expensive sessions. Triggers: "token optimize", "audit tokens", "context
-  audit", "optimize context", "reduce tokens", "token usage".
+disable-model-invocation: false
+description: "Audit Claude Code token consumption and context waste"
 ---
 
 # Token Optimize
@@ -31,9 +25,10 @@ The good news: most baseline waste is controllable. Community data shows 40-80% 
 | Each CLAUDE.md (raw) | ≤ 200 lines |
 | Each CLAUDE.md (expanded with @imports) | ≤ 500 lines |
 | MEMORY.md | ≤ 200 lines (hard cutoff — content beyond line 200 is invisible) |
-| MCP servers total (global + project) | ≤ 3 |
+| MCP deferred tokens (all servers) | ≤ 4K tokens |
+| Brain files total (`~/.claude/brains/`) | ≤ 100 lines |
 | User-controlled always-on | ≤ 12K tokens |
-| All skill descriptions combined | ≤ 16,000 chars |
+| All skill descriptions combined | ≤ 16,000 chars (with brain_tools routing, descriptions should be labels) |
 | Largest always-on file | ≤ 100 lines |
 | .claudeignore | Required if project has build dirs |
 | Additional directories | 0–2 entries |
@@ -51,7 +46,7 @@ Work through these 5 phases in order. Use Read, Glob, and Grep tools only — ne
 
 Scan every context source. For each file: path, line count, char count, estimated tokens (chars / 3.5).
 
-Categories: **always-on** (global CLAUDE.md, project CLAUDE.md, AGENTS.md, auto-memory MEMORY.md, memory-bank .md files, skill descriptions frontmatter, plugin skills), **on-demand** (.claude/rules/*.md, skill bodies), **settings** (settings.json, settings.local.json, .mcp.json, .claudeignore).
+Categories: **always-on** (global CLAUDE.md, project CLAUDE.md, AGENTS.md, auto-memory MEMORY.md, memory-bank .md files, brain files, skill descriptions frontmatter, plugin skills), **dynamic** (hook-injected context from SessionStart scripts — estimated, not statically measurable), **on-demand** (.claude/rules/*.md, skill bodies), **settings** (settings.json, settings.local.json, .mcp.json, .claudeignore).
 
 Critical: resolve all `@import` directives in CLAUDE.md files — grep for `^@` lines, read each target file, record expanded size. Use expanded size for all benchmarks. Show imports as indented sub-rows in the Context Breakdown table.
 
@@ -69,14 +64,16 @@ Compare each measurement against the thresholds above. Assign PASS / WARN (>75% 
 
 Cross-reference measured data for waste patterns:
 
-- **3a. Duplication** — same content in multiple always-on files (including @import overlap and cross-layer overlap)
+- **3a. Duplication** — same content in multiple always-on files (including @import overlap, cross-layer overlap, and brain file ↔ CLAUDE.md/MEMORY.md content overlap)
 - **3b. Stale content** — dates >30 days old in changelogs, "Done/Completed" markers, broken file references
 - **3c. Redundant permissions** — global wildcards making project-level rules redundant
-- **3d. Over-specified CLAUDE.md** — step-by-step workflows, file-specific instructions, setup docs, code templates that belong in skills or rules
+- **3d. Over-specified CLAUDE.md** — step-by-step workflows, file-specific instructions, setup docs, code templates that belong in skills or rules. Also: verbose skill descriptions (>80 chars) when brain_tools Semantic Toolbox handles routing — descriptions should be labels
 - **3e. MCP overhead** — unused servers (no allow rules), duplicate server names, deferred tool count
 - **3e2. Skill body waste** — skills >300 lines (recommend progressive disclosure refactoring), orchestrators that duplicate sub-skill content, hardcoded values that go stale
 - **3f. Missing optimizations** — no .claudeignore despite build dirs, no rules/ dir despite large CLAUDE.md, stale additionalDirectories
 - **3g. Cache-hostile patterns** — MCP configs or model switching that invalidates prompt cache mid-session
+- **3h. Brain file sprawl** — multiple `~/.claude/brains/*.md` files accumulating always-on cost across ecosystem projects. Each brain file is always-on for every project that @imports it
+- **3i. Hook dynamic overhead** — SessionStart hooks that inject context (e.g., brain-context.py). Estimated ~300-500 tokens per session. Not statically measurable but worth noting
 
 → Full detection criteria and issue taxonomy (Critical/Warning/Info): `references/measurement-guide.md`
 

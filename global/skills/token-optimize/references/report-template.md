@@ -24,8 +24,11 @@ Date: {today}
 | Source | Lines | Chars | ~Tokens | Category | Status |
 |--------|-------|-------|---------|----------|--------|
 | {path} | {n} | {n} | {n} | always-on | ✅/⚠️/❌ |
+|   ↳ @core-memory.md | {n} | {n} | {n} | @import | |
+|   ↳ @brains/{name}.md | {n} | {n} | {n} | @import | |
 | ... | | | | | |
 | **Total always-on** | | | **{n}** | | |
+| Hook dynamic (est.) | — | — | ~{n} | dynamic | ℹ️ |
 
 ## Issues Found
 
@@ -50,6 +53,7 @@ This audit measures BASELINE costs (static context loaded per session). It does 
 - Runtime token accumulation from tool call results (MCP responses, file reads)
 - Conversation history growth across turns
 - Skill body loading when skills are invoked mid-session
+- Hook-injected dynamic context (SessionStart brain context injection is estimated at ~300-500 tokens but varies by brain.db content)
 
 For long sessions, runtime costs typically dwarf baseline. Mitigations: `/compact` regularly, `/clear` between unrelated tasks, delegate heavy exploration to subagents.
 ```
@@ -100,8 +104,13 @@ Determine the project memory directory — it's under `~/.claude/projects/` with
     "agents_md": {N},
     "memory_md": {N},
     "memory_bank": {N},
+    "brain_files": {N},
+    "brain_files_count": {N},
+    "core_memory": {N},
     "skill_descriptions": {N},
-    "mcp_deferred": {N}
+    "mcp_deferred": {N},
+    "mcp_deferred_tool_count": {N},
+    "hook_dynamic_estimate": {N}
   },
   "issues": {
     "critical": {N},

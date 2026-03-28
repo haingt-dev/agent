@@ -35,3 +35,14 @@ if [ -f ".memory-bank/brief.md" ]; then
     head -50 ".memory-bank/brief.md"
     echo "--- End Memory Bank ---"
 fi
+
+# --- Brain: deterministic context injection ---
+BRAIN_PYTHON="/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3"
+[ -x "$BRAIN_PYTHON" ] || BRAIN_PYTHON="python3"
+BRAIN_CONTEXT=$("$BRAIN_PYTHON" "${CLAUDE_PLUGIN_ROOT}/scripts/brain-context.py" 2>/dev/null)
+if [ -n "$BRAIN_CONTEXT" ]; then
+    echo ""
+    echo "--- Brain Context ---"
+    echo "$BRAIN_CONTEXT"
+    echo "--- End Brain ---"
+fi

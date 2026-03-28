@@ -10,7 +10,7 @@
       "mcp__claude_ai_Context7__*",
       "mcp__todoist__*",
       "mcp__claude_ai_Google_Calendar__*",
-      "mcp__plugin_engram_engram__*"
+      "mcp__haingt-brain__*"
     ],
     "deny": [
       "Bash(rm -rf /)",
@@ -37,20 +37,13 @@
   },
   "enabledPlugins": {
     "haint-core@haint-marketplace": true,
-    "skill-creator@claude-plugins-official": true,
-    "engram@engram": true
+    "skill-creator@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "haint-marketplace": {
       "source": {
         "source": "directory",
         "path": "/home/haint/Projects/agent"
-      }
-    },
-    "engram": {
-      "source": {
-        "source": "github",
-        "repo": "Gentleman-Programming/engram"
       }
     }
   },

@@ -1,7 +1,5 @@
 # Claude Code — agent
 
-@~/.claude/brains/indie-ecosystem.md
-
 ## What This Is
 Infrastructure hub for Claude Code — global config, skills, memories, and plugins.
 

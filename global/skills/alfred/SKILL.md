@@ -1,6 +1,7 @@
 ---
 name: alfred
-description: "Life scheduler — add quests with smart classification + optional time placement, optimize days with materialization to calendar, add events with cascade replanning, cleanup/reschedule quests, or weekly review with Todoist data sync to Obsidian. Uses science-based scheduling (circadian, ultradian, IF, chronotype). Trigger when Hải mentions: scheduling, rearranging his day, adding events/tasks/quests, optimizing tomorrow, cleanup/reschedule, weekly review, or Vietnamese phrases like 'sắp xếp lịch', 'dời lịch', 'ngày mai có', 'tối ưu ngày', 'xếp lại', 'dọn quest', 'skip', 'thêm task', 'add task', 'quest', 'tạo task', 'review tuần', 'review weekly'. Also trigger for sleep/wake timing questions or scheduling conflicts."
+disable-model-invocation: false
+description: "Life scheduler — quests, optimize, cleanup, weekly review"
 argument-hint: "[event/task description / optimize today/tomorrow / cleanup / date]"
 model: sonnet
 allowed-tools: mcp__claude_ai_Google_Calendar__gcal_list_events, mcp__claude_ai_Google_Calendar__gcal_create_event, mcp__claude_ai_Google_Calendar__gcal_update_event, mcp__claude_ai_Google_Calendar__gcal_delete_event, mcp__claude_ai_Google_Calendar__gcal_find_my_free_time, mcp__todoist__find-tasks-by-date, mcp__todoist__find-tasks, mcp__todoist__update-tasks, mcp__todoist__add-tasks, mcp__todoist__complete-tasks, mcp__todoist__reschedule-tasks, mcp__todoist__find-completed-tasks, Read, AskUserQuestion, Bash
@@ -168,6 +169,8 @@ When a new event conflicts with existing anchors:
 | Exercise time blocks | Calendar `[alfred]` | Time placement block, not a Todoist task |
 | Wind-down / screens off | Calendar `[alfred]` | Behavioral anchor, calendar-only |
 
+**Reminders:** Handled by Todoist app default (10 min before any timed task). No per-task reminder logic needed in Alfred. Blocked on [Todoist MCP issue #92](https://github.com/Doist/todoist-ai/issues/92) — `dueString` doesn't support `!` reminder shorthand, and MCP has no `reminders` parameter. Re-enable when shipped.
+
 **Calendar-only event format:**
 ```
 Title: [emoji] Activity name
@@ -214,10 +217,11 @@ Use `calendarId` and `id` (eventId) from Step 2's `gcal_list_events` response fo
 When optimizing (Mode 2), prefer updating existing events over delete-recreate:
 1. List calendar events → identify `[alfred]`-marked ones + Todoist-synced ones
 2. Read Todoist tasks for the day
-3. Calculate new optimal schedule
-4. **Todoist tasks**: set timed due — `reschedule-tasks` for recurring, `update-tasks` for non-recurring → sync updates calendar events. Read task `duration` field to allocate correct slot size.
-5. **`[alfred]` calendar events**: match by title → `gcal_update_event` to adjust times. Delete only if block no longer needed. Create only if new block required.
-6. Proposal shows changes as updates (✏️ MOVE), not delete+add
+3. **Detect unmaterialized tasks:** `find-tasks` with filter `(today | overdue) & no time` — these have a due date but no time slot. Offer to schedule them alongside existing tasks.
+4. Calculate new optimal schedule
+5. **Todoist tasks**: set timed due — `reschedule-tasks` for recurring, `update-tasks` for non-recurring → sync updates calendar events. Read task `duration` field to allocate correct slot size.
+6. **`[alfred]` calendar events**: match by title → `gcal_update_event` to adjust times. Delete only if block no longer needed. Create only if new block required.
+7. Proposal shows changes as updates (✏️ MOVE), not delete+add
 
 ### Post-Execute
 - Recap all changes made (gcal + Todoist)
@@ -228,8 +232,8 @@ When optimizing (Mode 2), prefer updating existing events over delete-recreate:
 > Read `references/mode-details.md` — full cleanup procedure (steps C1-C5, edge cases, dueString technique).
 
 **Quick reference:**
-1. **C1**: Parallel fetch — `find-tasks-by-date` (overdue included) + `gcal_list_events` for `[alfred]` blocks
-2. **C2**: Split tasks into reschedulable table
+1. **C1**: Parallel fetch — `find-tasks-by-date` (overdue included) + `gcal_list_events` for `[alfred]` blocks + `find-tasks` with filter `created before: -30 days & no date & !recurring` (stale tasks)
+2. **C2**: Split tasks into reschedulable table. Show stale tasks (>30 days, no date) as separate "🧹 Stale" section — offer: schedule, archive, or delete
 3. **C3**: `AskUserQuestion` — "Tasks nào đã hoàn thành hôm nay?"
 4. **C4**: `complete-tasks` for done, `reschedule-tasks` for reschedule (preserves recurrence), `gcal_delete` stale `[alfred]` blocks
 5. **C5**: Show summary
@@ -336,8 +340,8 @@ These examples are the classification ground truth — follow them exactly when 
 
 **Quick reference:**
 1. **R1**: Parse week — default current week, "last week"/"tuần trước" = previous, "W11" = specific
-2. **R2**: Parallel fetch — `find-completed-tasks` (since=Monday, until=Sunday) + `find-tasks-by-date` (overdue in range) + `Read` weekly note
-3. **R3**: Build review — completed grouped by project, carried over list. Show proposal via `AskUserQuestion`.
+2. **R2**: Parallel fetch — `find-completed-tasks` (since=Monday, until=Sunday) + `find-tasks-by-date` (overdue in range) + `get-productivity-stats` + `Read` weekly note
+3. **R3**: Build review — completed grouped by project, carried over list, productivity stats (streak, karma, weekly completion count). Show proposal via `AskUserQuestion`.
 4. **R4**: Patch note — `obsidian patch` to insert/replace `## 📊 Review` section + `obsidian property:set` for `updated` timestamp and `status`
 5. **R5**: Show summary
 
