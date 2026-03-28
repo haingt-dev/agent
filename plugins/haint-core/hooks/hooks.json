@@ -47,14 +47,6 @@
         "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/entity-extract.py",
         "timeout": 15
       }]
-    }],
-    "Notification": [{
-      "matcher": "",
-      "hooks": [{
-        "type": "command",
-        "command": "${CLAUDE_PLUGIN_ROOT}/scripts/notify.sh",
-        "timeout": 5
-      }]
     }]
   }
 }
