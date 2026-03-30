@@ -86,6 +86,12 @@ def brain_save(
                         rel.get("weight", 1.0),
                     ),
                 )
+                # Supersedes demotion: halve importance of superseded memory
+                if rel.get("relation_type") == "supersedes":
+                    conn.execute(
+                        "UPDATE memories SET importance = COALESCE(importance, 0.5) * 0.5 WHERE id = ?",
+                        (rel["target_id"],),
+                    )
             except (sqlite3.IntegrityError, KeyError):
                 pass  # Skip invalid relations
 

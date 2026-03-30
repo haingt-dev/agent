@@ -244,7 +244,7 @@ def consolidate_sessions(
             brain_save(
                 conn, combined, "session",
                 tags=["weekly-digest", week_key],
-                metadata={"source_session_ids": [s["id"] for s in sessions]},
+                metadata={"source": "consolidation", "source_session_ids": [s["id"] for s in sessions]},
             )
 
             # Delete old session summaries from memories table (session records kept)
@@ -276,9 +276,9 @@ def decay_importance(
 
     Memories whose importance decays below 0.05 are pruned.
     """
-    from .importance import compute_decay
+    from .importance import compute_decay, compute_graph_boost
 
-    result = {"decayed": 0, "pruned": 0, "details": []}
+    result = {"decayed": 0, "pruned": 0, "graph_boosted": 0, "details": []}
     PRUNE_THRESHOLD = 0.05
 
     rows = conn.execute("""
@@ -297,6 +297,13 @@ def decay_importance(
             continue
 
         old_imp = row["importance"] if row["importance"] is not None else 0.5
+
+        # Graph boost: hub memories (many connections) resist decay
+        graph_boost = compute_graph_boost(conn, row["id"])
+        if graph_boost > 0:
+            old_imp = min(1.0, old_imp + graph_boost)
+            result["graph_boosted"] += 1
+
         new_imp = compute_decay(old_imp, days)
 
         if new_imp < PRUNE_THRESHOLD:

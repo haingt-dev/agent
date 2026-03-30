@@ -339,11 +339,12 @@ def _fts_search(
     fts_query = " OR ".join(query_words[:5])
     try:
         rows = conn.execute(
-            """SELECT m.id, m.content, m.type, m.created_at, rank
+            """SELECT m.id, m.content, m.type, m.created_at, m.importance, rank
                FROM memory_fts f
                JOIN memories m ON m.id = f.memory_id
                WHERE memory_fts MATCH ?
                  AND m.type NOT IN ('tool', 'session')
+                 AND COALESCE(m.importance, 0.5) >= 0.3
                  AND (m.project = ? OR m.project IS NULL)
                ORDER BY rank
                LIMIT 20""",
@@ -351,7 +352,8 @@ def _fts_search(
         ).fetchall()
         return [
             {"id": r["id"], "content": r["content"], "type": r["type"],
-             "created_at": r["created_at"], "fts_rank": i}
+             "created_at": r["created_at"], "importance": r["importance"] or 0.5,
+             "fts_rank": i}
             for i, r in enumerate(rows)
         ]
     except Exception:
@@ -371,10 +373,11 @@ def _vec_search_general(
                 WHERE embedding MATCH :embedding
                   AND k = :fetch_k
             )
-            SELECT m.id, m.content, m.type, m.created_at, v.distance
+            SELECT m.id, m.content, m.type, m.created_at, m.importance, v.distance
             FROM vec_results v
             JOIN memories m ON m.id = v.memory_id
             WHERE m.type NOT IN ('tool', 'session')
+              AND COALESCE(m.importance, 0.5) >= 0.3
               AND (m.project = :project OR m.project IS NULL)
             ORDER BY v.distance
             LIMIT 20""",
@@ -382,7 +385,8 @@ def _vec_search_general(
         ).fetchall()
         return [
             {"id": r["id"], "content": r["content"], "type": r["type"],
-             "created_at": r["created_at"], "vec_rank": i}
+             "created_at": r["created_at"], "importance": r["importance"] or 0.5,
+             "vec_rank": i}
             for i, r in enumerate(rows)
         ]
     except Exception:
@@ -402,12 +406,15 @@ def search_general_hybrid(
     if embedding is None:
         for r in fts_results:
             r["score"] = 1.0 / (RRF_K + r["fts_rank"])
+            imp = r.get("importance", 0.5)
+            r["score"] *= (0.7 + 0.3 * imp)
             r["score"] -= TYPE_PRIORITY.get(r["type"], 2) * 0.001
             if r.get("created_at", "")[:10] == today_str:
                 r["score"] += 0.005
-        fts_results.sort(key=lambda x: -x["score"])
+        fts_results.sort(key=lambda x: (-x["score"], -x.get("importance", 0.5)))
         return [
-            {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"]}
+            {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"],
+             "importance": r.get("importance", 0.5)}
             for r in fts_results[:FETCH_K_GENERAL]
         ]
 
@@ -422,6 +429,7 @@ def search_general_hybrid(
             "content": r["content"],
             "type": r["type"],
             "created_at": r.get("created_at", ""),
+            "importance": r.get("importance", 0.5),
             "score": 1.0 / (RRF_K + r["fts_rank"]),
         }
 
@@ -436,18 +444,23 @@ def search_general_hybrid(
                 "content": r["content"],
                 "type": r["type"],
                 "created_at": r.get("created_at", ""),
+                "importance": r.get("importance", 0.5),
                 "score": vec_score,
             }
 
     for entry in scores.values():
+        # Importance-weighted RRF: mild multiplier (0.7 at imp=0, 1.0 at imp=1)
+        imp = entry.get("importance", 0.5)
+        entry["score"] *= (0.7 + 0.3 * imp)
         entry["score"] -= TYPE_PRIORITY.get(entry["type"], 2) * 0.001
         # Same-day recency boost: today's memories are more likely relevant
         if entry.get("created_at", "")[:10] == today_str:
             entry["score"] += 0.005
 
-    ranked = sorted(scores.values(), key=lambda x: -x["score"])
+    ranked = sorted(scores.values(), key=lambda x: (-x["score"], -x.get("importance", 0.5)))
     return [
-        {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"]}
+        {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"],
+         "importance": r.get("importance", 0.5)}
         for r in ranked[:FETCH_K_GENERAL]
     ]
 

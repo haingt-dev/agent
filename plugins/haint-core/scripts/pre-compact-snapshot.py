@@ -430,16 +430,27 @@ def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool:
 
         memory_id = uuid.uuid4().hex[:12]
         tags = json.dumps(["pre-compact", "auto-snapshot", "structured"])
+        source = "pre-compact-hook"
         meta = json.dumps({
-            "source": "pre-compact-hook",
+            "source": source,
             "format": "structured-v1",
             "counts": counts,
         })
 
+        # Compute importance from type × source
+        importance = 0.3  # default for session type
+        try:
+            brain_src = Path.home() / "Projects" / "agent" / "mcp" / "haingt-brain" / "src"
+            sys.path.insert(0, str(brain_src))
+            from haingt_brain.importance import compute_initial_importance
+            importance = compute_initial_importance("session", source)
+        except Exception:
+            pass
+
         conn.execute(
-            """INSERT INTO memories (id, content, type, tags, project, metadata)
-               VALUES (?, ?, 'session', ?, ?, ?)""",
-            (memory_id, snapshot, tags, project, meta),
+            """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
+               VALUES (?, ?, 'session', ?, ?, ?, ?)""",
+            (memory_id, snapshot, tags, project, meta, importance),
         )
 
         conn.execute(

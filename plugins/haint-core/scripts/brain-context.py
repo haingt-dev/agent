@@ -34,7 +34,24 @@ def query_context(project: str | None) -> str:
 
     sections = []
 
-    # Recent decisions (last 7 days, max 3)
+    # Hot-tier memories (importance >= 0.8, any age — timeless high-value)
+    try:
+        hot_rows = conn.execute(
+            """SELECT content, type, importance FROM memories
+               WHERE COALESCE(importance, 0.5) >= 0.8
+                 AND type NOT IN ('tool', 'session')
+                 AND (project = ? OR project IS NULL)
+               ORDER BY importance DESC, updated_at DESC
+               LIMIT 3""",
+            (project,),
+        ).fetchall()
+        if hot_rows:
+            items = [f"- [{r['type']}] {r['content'][:120]}" for r in hot_rows]
+            sections.append("High-value (timeless):\n" + "\n".join(items))
+    except Exception:
+        pass
+
+    # Recent decisions (last 7 days, max 3) — ordered by importance then recency
     try:
         rows = conn.execute(
             """SELECT content FROM memories
@@ -43,6 +60,7 @@ def query_context(project: str | None) -> str:
                  AND created_at >= datetime('now', '-7 days')
                ORDER BY
                  CASE WHEN type = 'decision' THEN 0 ELSE 1 END,
+                 COALESCE(importance, 0.5) DESC,
                  created_at DESC
                LIMIT 3""",
             (project,),

@@ -120,9 +120,12 @@ def init_schema(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
-    # Backfill importance for existing memories (one-time)
+    # Backfill importance for existing memories
+    # Triggers when: memories with default 0.5 that have access history OR source metadata
     needs_backfill = conn.execute(
-        "SELECT COUNT(*) FROM memories WHERE importance = 0.5 AND access_count > 0"
+        """SELECT COUNT(*) FROM memories
+           WHERE importance = 0.5
+             AND (access_count > 0 OR json_extract(metadata, '$.source') IS NOT NULL)"""
     ).fetchone()[0]
     if needs_backfill:
         _backfill_importance(conn)
@@ -135,19 +138,22 @@ def serialize_embedding(embedding: list[float]) -> bytes:
 
 
 def _backfill_importance(conn: sqlite3.Connection) -> None:
-    """One-time backfill: set importance from type + access_count for existing memories."""
-    from .importance import BASE_IMPORTANCE, SOURCE_BOOST, compute_access_boost
+    """Backfill: set importance from type + source + access_count for existing memories."""
+    from .importance import compute_access_boost, compute_initial_importance
 
-    rows = conn.execute("SELECT id, type, access_count, metadata FROM memories").fetchall()
+    rows = conn.execute(
+        """SELECT id, type, access_count, metadata FROM memories
+           WHERE importance = 0.5
+             AND (access_count > 0 OR json_extract(metadata, '$.source') IS NOT NULL)"""
+    ).fetchall()
     for row in rows:
-        base = BASE_IMPORTANCE.get(row["type"], 0.5)
+        source = None
         try:
             meta = json.loads(row["metadata"]) if row["metadata"] else {}
             source = meta.get("source")
-            if source:
-                base = max(0.0, min(1.0, base + SOURCE_BOOST.get(source, 0.0)))
         except Exception:
             pass
+        base = compute_initial_importance(row["type"], source)
         importance = compute_access_boost(base, row["access_count"])
         conn.execute("UPDATE memories SET importance = ? WHERE id = ?", (importance, row["id"]))
     conn.commit()

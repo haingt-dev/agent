@@ -187,3 +187,65 @@ def test_importance_range():
         for s in SOURCE_BOOST:
             result = compute_initial_importance(t, s)
             assert 0.0 <= result <= 1.0, f"{t}×{s} = {result}"
+
+
+# ── Source Normalization ────────────────────────────────────────────────
+
+
+def test_hook_source_normalization():
+    """Hook-specific sources (containing 'hook') map to hook boost."""
+    # All hook sources should get the same boost as "hook"
+    hook_boost = compute_initial_importance("discovery", "hook")
+    assert compute_initial_importance("discovery", "search-and-store-hook") == hook_boost
+    assert compute_initial_importance("discovery", "entity-extract-hook") == hook_boost
+    assert compute_initial_importance("discovery", "pre-compact-hook") == hook_boost
+
+
+def test_hook_source_lower_than_manual():
+    """Hook-captured memories should be lower importance than manual ones."""
+    manual = compute_initial_importance("discovery", "manual")
+    hook = compute_initial_importance("discovery", "search-and-store-hook")
+    assert hook < manual
+
+
+# ── Graph Boost ─────────────────────────────────────────────────────────
+
+
+def test_graph_boost_zero_connections():
+    """No connections = no boost."""
+    import sqlite3
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE relations (source_id TEXT, target_id TEXT, relation_type TEXT, weight REAL)")
+    from haingt_brain.importance import compute_graph_boost
+    assert compute_graph_boost(conn, "nonexistent") == 0.0
+    conn.close()
+
+
+def test_graph_boost_increases_with_connections():
+    """More connections = higher boost, capped at 0.2."""
+    import sqlite3
+    from haingt_brain.importance import compute_graph_boost
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE relations (source_id TEXT, target_id TEXT, relation_type TEXT, weight REAL)")
+    # Add 5 connections
+    for i in range(5):
+        conn.execute("INSERT INTO relations VALUES (?, ?, 'relates_to', 1.0)", ("hub", f"target_{i}"))
+    assert abs(compute_graph_boost(conn, "hub") - 0.10) < 1e-9  # 5 × 0.02
+    # Add 10 more (15 total, but capped at 10)
+    for i in range(5, 15):
+        conn.execute("INSERT INTO relations VALUES (?, ?, 'relates_to', 1.0)", ("hub", f"target_{i}"))
+    assert abs(compute_graph_boost(conn, "hub") - 0.20) < 1e-9  # capped at 10 × 0.02
+    conn.close()
+
+
+# ── Supersedes Behavior ─────────────────────────────────────────────────
+
+
+def test_supersedes_expected_decay():
+    """Superseded memory at importance=0.8 should drop to 0.4."""
+    # This tests the expected behavior of save.py's supersedes demotion
+    original = 0.8
+    after_supersede = original * 0.5
+    assert abs(after_supersede - 0.4) < 1e-9

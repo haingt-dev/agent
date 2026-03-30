@@ -154,13 +154,32 @@ def brain_session_save(
     )
     conn.commit()
 
-    return {
+    # Reflect trigger: compute session importance accumulator
+    suggestions = []
+    if memory_ids:
+        try:
+            imp_rows = conn.execute(
+                f"SELECT importance FROM memories WHERE id IN ({','.join('?' * len(memory_ids))})",
+                memory_ids,
+            ).fetchall()
+            total_importance = sum(r["importance"] or 0.5 for r in imp_rows)
+            if total_importance > 3.0:
+                suggestions.append(
+                    "High-value session — consider /reflect to consolidate insights"
+                )
+        except Exception:
+            pass
+
+    result = {
         "status": "saved",
         "session_id": session_id,
         "summary_length": len(summary),
         "memories_created": len(memory_ids),
         "memory_ids": memory_ids,
     }
+    if suggestions:
+        result["suggestions"] = suggestions
+    return result
 
 
 def brain_session_status(conn: sqlite3.Connection) -> dict:
@@ -180,10 +199,33 @@ def brain_session_status(conn: sqlite3.Connection) -> dict:
         "SELECT COUNT(*) FROM sessions WHERE summary IS NOT NULL"
     ).fetchone()[0]
 
-    return {
+    # Importance distribution (hot/warm/cold tiers)
+    try:
+        tier_row = conn.execute("""
+            SELECT
+                COUNT(CASE WHEN COALESCE(importance, 0.5) >= 0.8 THEN 1 END) AS hot,
+                COUNT(CASE WHEN COALESCE(importance, 0.5) >= 0.4
+                           AND COALESCE(importance, 0.5) < 0.8 THEN 1 END) AS warm,
+                COUNT(CASE WHEN COALESCE(importance, 0.5) < 0.4 THEN 1 END) AS cold,
+                ROUND(AVG(COALESCE(importance, 0.5)), 3) AS avg_importance
+            FROM memories WHERE type != 'tool'
+        """).fetchone()
+        importance_tiers = {
+            "hot": tier_row["hot"],
+            "warm": tier_row["warm"],
+            "cold": tier_row["cold"],
+            "avg_importance": tier_row["avg_importance"],
+        }
+    except Exception:
+        importance_tiers = None
+
+    result = {
         "total_memories": total,
         "by_type": {r["type"]: r["count"] for r in type_counts},
         "created_last_7_days": recent_7d,
         "total_sessions": sessions_total,
         "sessions_with_summary": sessions_with_summary,
     }
+    if importance_tiers:
+        result["importance_tiers"] = importance_tiers
+    return result

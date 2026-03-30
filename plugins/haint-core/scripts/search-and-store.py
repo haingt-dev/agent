@@ -86,12 +86,22 @@ def save_to_brain(content: str, tool_type: str, project: str | None = None) -> b
 
         memory_id = uuid.uuid4().hex[:12]
         tags = json.dumps([tool_type, "auto-captured"])
-        meta = json.dumps({"source": "search-and-store-hook"})
+        source = "search-and-store-hook"
+        meta = json.dumps({"source": source})
+
+        # Compute importance from type × source
+        importance = 0.5  # default
+        try:
+            sys.path.insert(0, str(BRAIN_SRC))
+            from haingt_brain.importance import compute_initial_importance
+            importance = compute_initial_importance("discovery", source)
+        except Exception:
+            pass
 
         conn.execute(
-            """INSERT INTO memories (id, content, type, tags, project, metadata)
-               VALUES (?, ?, 'discovery', ?, ?, ?)""",
-            (memory_id, content, tags, project, meta),
+            """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
+               VALUES (?, ?, 'discovery', ?, ?, ?, ?)""",
+            (memory_id, content, tags, project, meta, importance),
         )
 
         # Insert into FTS

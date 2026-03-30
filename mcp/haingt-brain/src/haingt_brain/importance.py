@@ -28,11 +28,31 @@ SOURCE_BOOST: dict[str, float] = {
 def compute_initial_importance(memory_type: str, source: str | None = None) -> float:
     """Compute importance at creation time from type + source.
 
+    Normalizes hook-specific sources (e.g. "search-and-store-hook" → "hook" boost).
     Returns a value in [0.0, 1.0].
     """
     base = BASE_IMPORTANCE.get(memory_type, 0.5)
-    boost = SOURCE_BOOST.get(source, 0.0) if source else 0.0
+    if source:
+        boost = SOURCE_BOOST.get(source, 0.0)
+        # Normalize hook-specific sources (anything containing "hook")
+        if boost == 0.0 and "hook" in source:
+            boost = SOURCE_BOOST.get("hook", 0.0)
+    else:
+        boost = 0.0
     return max(0.0, min(1.0, base + boost))
+
+
+def compute_graph_boost(conn, memory_id: str) -> float:
+    """Boost importance based on knowledge graph connectivity.
+
+    A memory connected to 5+ other memories is a hub — inherently more important.
+    Max boost: +0.2 (at 10+ connections).
+    """
+    count = conn.execute(
+        "SELECT COUNT(*) FROM relations WHERE source_id = ? OR target_id = ?",
+        (memory_id, memory_id),
+    ).fetchone()[0]
+    return 0.02 * min(count, 10)
 
 
 def compute_decay(importance: float, days_since_access: float) -> float:

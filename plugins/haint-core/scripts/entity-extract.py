@@ -151,12 +151,22 @@ def save_entity(conn: sqlite3.Connection, name: str, category: str, description:
     memory_id = uuid.uuid4().hex[:12]
     content = f"{category.title()}: {name} — {description}"
     tags = json.dumps([category, "auto-extracted"])
-    meta = json.dumps({"source": "entity-extract-hook", "category": category, "name": name})
+    source = "entity-extract-hook"
+    meta = json.dumps({"source": source, "category": category, "name": name})
+
+    # Compute importance from type × source
+    importance = 0.5
+    try:
+        sys.path.insert(0, str(BRAIN_SRC))
+        from haingt_brain.importance import compute_initial_importance
+        importance = compute_initial_importance("entity", source)
+    except Exception:
+        pass
 
     conn.execute(
-        """INSERT INTO memories (id, content, type, tags, project, metadata)
-           VALUES (?, ?, 'entity', ?, ?, ?)""",
-        (memory_id, content, tags, project, meta),
+        """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
+           VALUES (?, ?, 'entity', ?, ?, ?, ?)""",
+        (memory_id, content, tags, project, meta, importance),
     )
 
     # FTS entry
