@@ -38,10 +38,13 @@ def query_context(project: str | None) -> str:
     try:
         rows = conn.execute(
             """SELECT content FROM memories
-               WHERE type = 'decision'
+               WHERE type IN ('decision', 'discovery')
                  AND (project = ? OR project IS NULL)
                  AND created_at >= datetime('now', '-7 days')
-               ORDER BY created_at DESC LIMIT 3""",
+               ORDER BY
+                 CASE WHEN type = 'decision' THEN 0 ELSE 1 END,
+                 created_at DESC
+               LIMIT 3""",
             (project,),
         ).fetchall()
         if rows:

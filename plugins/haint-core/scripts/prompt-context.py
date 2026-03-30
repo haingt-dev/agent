@@ -36,6 +36,7 @@ import struct
 import sys
 import time
 import urllib.request
+from datetime import date
 from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
@@ -82,6 +83,38 @@ TYPE_PRIORITY = {
     "session": 2,
 }
 
+# Emotional signal detection — expand query when personal/emotional context detected
+# Only unambiguous signals. Avoid short Vietnamese words that appear in technical contexts.
+EMOTIONAL_WORD_SIGNALS = {
+    "khóc", "buồn", "giận", "tức", "stress", "anxious",
+    "crying", "funeral", "grieving", "depressed",
+}
+EMOTIONAL_PHRASE_SIGNALS = [
+    "mệt mỏi", "tâm lý", "cảm xúc", "lo lắng", "đau lòng",
+    "ổn định lại", "đám tang", "đám cưới",
+    "nói chuyện với vợ", "nói chuyện với duyên",
+]
+EMOTIONAL_EXPANSION = "emotional family relationships personal reflect"
+
+
+def detect_emotional_signals(text: str) -> bool:
+    """Check if prompt contains emotional/personal signals.
+    Uses strip_viet() for fuzzy phrase matching (handles diacritic typos).
+    """
+    lower = text.lower()
+    stripped_text = _strip_viet(text)
+    # Phrase-level check (exact + fuzzy via diacritic stripping)
+    for phrase in EMOTIONAL_PHRASE_SIGNALS:
+        if phrase in lower:
+            return True
+        if _strip_viet(phrase) in stripped_text:
+            return True
+    # Single-word check (only unambiguous words)
+    words = set(lower.split())
+    stripped = {w.strip(",.!?;:'\"()[]{}") for w in words}
+    return bool((words | stripped) & EMOTIONAL_WORD_SIGNALS)
+
+
 # sqlite-vec: optional, enables vector search
 try:
     import sqlite_vec
@@ -89,6 +122,16 @@ try:
     HAS_VEC = True
 except ImportError:
     HAS_VEC = False
+
+# Vietnamese normalizer — imported from brain package (same pattern as entity-extract.py)
+_BRAIN_SRC = Path.home() / "Projects" / "agent" / "mcp" / "haingt-brain" / "src"
+try:
+    sys.path.insert(0, str(_BRAIN_SRC))
+    from haingt_brain.vn_normalize import normalize_vn as _normalize_vn
+    from haingt_brain.vn_normalize import strip_viet as _strip_viet
+except Exception:
+    _normalize_vn = lambda x: x  # no-op fallback
+    _strip_viet = lambda x: x.lower()  # fallback: just lowercase
 
 
 # ── Input ─────────────────────────────────────────────────────────────────
@@ -288,6 +331,7 @@ def _fts_search(
 ) -> list[dict]:
     """FTS5 keyword search for general memories with project scoping."""
     words = prompt[:100].split()
+    words = [w.strip(",.!?;:'\"()[]{}") for w in words]
     query_words = [w for w in words if len(w) > 2 and w.isalnum()]
     if not query_words:
         return []
@@ -295,18 +339,19 @@ def _fts_search(
     fts_query = " OR ".join(query_words[:5])
     try:
         rows = conn.execute(
-            """SELECT m.id, m.content, m.type, rank
+            """SELECT m.id, m.content, m.type, m.created_at, rank
                FROM memory_fts f
                JOIN memories m ON m.id = f.memory_id
                WHERE memory_fts MATCH ?
-                 AND m.type != 'tool'
+                 AND m.type NOT IN ('tool', 'session')
                  AND (m.project = ? OR m.project IS NULL)
                ORDER BY rank
                LIMIT 20""",
             (fts_query, project),
         ).fetchall()
         return [
-            {"id": r["id"], "content": r["content"], "type": r["type"], "fts_rank": i}
+            {"id": r["id"], "content": r["content"], "type": r["type"],
+             "created_at": r["created_at"], "fts_rank": i}
             for i, r in enumerate(rows)
         ]
     except Exception:
@@ -326,17 +371,18 @@ def _vec_search_general(
                 WHERE embedding MATCH :embedding
                   AND k = :fetch_k
             )
-            SELECT m.id, m.content, m.type, v.distance
+            SELECT m.id, m.content, m.type, m.created_at, v.distance
             FROM vec_results v
             JOIN memories m ON m.id = v.memory_id
-            WHERE m.type != 'tool'
+            WHERE m.type NOT IN ('tool', 'session')
               AND (m.project = :project OR m.project IS NULL)
             ORDER BY v.distance
             LIMIT 20""",
             {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "project": project},
         ).fetchall()
         return [
-            {"id": r["id"], "content": r["content"], "type": r["type"], "vec_rank": i}
+            {"id": r["id"], "content": r["content"], "type": r["type"],
+             "created_at": r["created_at"], "vec_rank": i}
             for i, r in enumerate(rows)
         ]
     except Exception:
@@ -351,11 +397,14 @@ def search_general_hybrid(
 ) -> list[dict]:
     """Hybrid search with RRF fusion + type weighting. Returns results with IDs."""
     fts_results = _fts_search(conn, prompt, project)
+    today_str = date.today().isoformat()
 
     if embedding is None:
         for r in fts_results:
             r["score"] = 1.0 / (RRF_K + r["fts_rank"])
             r["score"] -= TYPE_PRIORITY.get(r["type"], 2) * 0.001
+            if r.get("created_at", "")[:10] == today_str:
+                r["score"] += 0.005
         fts_results.sort(key=lambda x: -x["score"])
         return [
             {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"]}
@@ -372,6 +421,7 @@ def search_general_hybrid(
             "id": mid,
             "content": r["content"],
             "type": r["type"],
+            "created_at": r.get("created_at", ""),
             "score": 1.0 / (RRF_K + r["fts_rank"]),
         }
 
@@ -385,11 +435,15 @@ def search_general_hybrid(
                 "id": mid,
                 "content": r["content"],
                 "type": r["type"],
+                "created_at": r.get("created_at", ""),
                 "score": vec_score,
             }
 
     for entry in scores.values():
         entry["score"] -= TYPE_PRIORITY.get(entry["type"], 2) * 0.001
+        # Same-day recency boost: today's memories are more likely relevant
+        if entry.get("created_at", "")[:10] == today_str:
+            entry["score"] += 0.005
 
     ranked = sorted(scores.values(), key=lambda x: -x["score"])
     return [
@@ -446,6 +500,9 @@ if __name__ == "__main__":
     if stripped.startswith("/") or stripped.startswith("!"):
         sys.exit(0)
 
+    # Normalize Vietnamese Telex leaks before search + embedding
+    normalized = _normalize_vn(stripped)
+
     project = detect_project()
     injected = load_injected_ids()
     context_kw = load_context_keywords()
@@ -455,8 +512,12 @@ if __name__ == "__main__":
     new_ids: set[str] = set()
     new_chars = 0
 
-    # Build combined query from current prompt + accumulated keywords
-    combined = build_combined_query(stripped, context_kw)
+    # Build combined query from normalized prompt + accumulated keywords
+    combined = build_combined_query(normalized, context_kw)
+
+    # Expand query when emotional/personal signals detected
+    if detect_emotional_signals(normalized):
+        combined += " " + EMOTIONAL_EXPANSION
 
     # Embed once — reuse for both phases
     embedding = None
@@ -504,8 +565,8 @@ if __name__ == "__main__":
 
         conn.close()
 
-    # Save IDs + prompt + chars + tool state to cache
-    save_cache(new_ids, stripped, new_chars, tool_names_to_save, new_tool_chars)
+    # Save IDs + normalized prompt + chars + tool state to cache
+    save_cache(new_ids, normalized, new_chars, tool_names_to_save, new_tool_chars)
 
     if not sections:
         sys.exit(0)

@@ -27,6 +27,14 @@ def brain_recall(
     Returns:
         List of matching memories sorted by relevance.
     """
+    # Normalize Vietnamese Telex leaks in query (clean brain architecture)
+    try:
+        from ..vn_normalize import normalize_vn
+
+        query = normalize_vn(query)
+    except Exception:
+        pass
+
     results = hybrid_search(conn, query, memory_type, project, k)
 
     # Apply time filter if specified

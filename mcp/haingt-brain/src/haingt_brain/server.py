@@ -173,14 +173,14 @@ def brain_session(
 
     Actions:
       - "start": Begin a new session. Returns recent context (last sessions, active entities, decisions).
-      - "save": End session and persist learnings. Requires session_id and summary.
+      - "save": End session and persist learnings. Requires summary. session_id is optional (auto-creates if missing).
       - "status": Return memory health stats (counts by type, recent activity).
       - "consolidate": Run auto-consolidation (merge duplicates, decay stale patterns, compress old sessions).
 
     Args:
         action: One of "start", "save", "status", "consolidate".
         project: Project name for scoping context.
-        session_id: Required for "save" — the session ID from "start".
+        session_id: Optional for "save" — the session ID from "start". Auto-creates if missing.
         summary: Required for "save" — brief summary of what happened this session.
         decisions: Optional list of decisions made (auto-saved as decision memories).
         discoveries: Optional list of things learned (auto-saved as discovery memories).
@@ -191,8 +191,8 @@ def brain_session(
     if action == "start":
         result = _session_start(conn, project)
     elif action == "save":
-        if not session_id or not summary:
-            return json.dumps({"error": "session_id and summary are required for 'save'"})
+        if not summary:
+            return json.dumps({"error": "summary is required for 'save'"})
         result = _session_save(conn, session_id, summary, decisions, discoveries, entities)
     elif action == "status":
         result = _session_status(conn)

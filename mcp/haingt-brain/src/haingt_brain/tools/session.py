@@ -114,9 +114,22 @@ def brain_session_save(
     """
     Save session learnings and mark session as ended.
 
+    If session_id is None, auto-creates a session first (single-step save).
     Optionally auto-creates memory entries for decisions, discoveries, and entities.
     """
     from .save import brain_save
+
+    # Auto-create session if not provided (enables single-step save from /wrap)
+    if not session_id:
+        session_id = uuid.uuid4().hex[:12]
+        project = conn.execute(
+            "SELECT project FROM sessions ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        proj = project["project"] if project else None
+        conn.execute(
+            "INSERT INTO sessions (id, project) VALUES (?, ?)",
+            (session_id, proj),
+        )
 
     memory_ids = []
 

@@ -31,6 +31,14 @@ def brain_save(
     Returns:
         dict with id, status, and the created memory.
     """
+    # Normalize Vietnamese Telex leaks before indexing (clean brain architecture)
+    try:
+        from ..vn_normalize import normalize_vn
+
+        content = normalize_vn(content)
+    except Exception:
+        pass  # fallback: store original
+
     memory_id = uuid.uuid4().hex[:12]
     tags_json = json.dumps(tags or [])
     meta_json = json.dumps(metadata or {})
