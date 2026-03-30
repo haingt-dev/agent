@@ -58,6 +58,7 @@ def brain_save(
         tags: Optional tags for filtering (e.g., ["python", "architecture"]).
         project: Project scope (omit for global memories accessible everywhere).
         metadata: Extra data (JSON string or dict).
+                  Use {"source": "reflect|wrap|manual|hook|research|mentor"} to set importance weighting.
         relations: List of {target_id, relation_type, weight?} (JSON string or list).
                    relation_type: causes, fixes, contradicts, relates_to, used_in, part_of, supersedes
     """

@@ -60,6 +60,7 @@ def brain_recall(
             "project": r["project"],
             "created_at": r["created_at"],
             "access_count": r["access_count"],
+            "importance": round(r.get("importance", 0.5), 3),
         }
         if r.get("metadata") and r["metadata"] != "{}":
             entry["metadata"] = json.loads(r["metadata"]) if isinstance(r["metadata"], str) else r["metadata"]

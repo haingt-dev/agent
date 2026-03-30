@@ -133,17 +133,17 @@ def brain_session_save(
 
     memory_ids = []
 
-    # Save individual items as memories
+    # Save individual items as memories (with source attribution for importance)
     for content in (decisions or []):
-        r = brain_save(conn, content, "decision")
+        r = brain_save(conn, content, "decision", metadata={"source": "wrap"})
         memory_ids.append(r["id"])
 
     for content in (discoveries or []):
-        r = brain_save(conn, content, "discovery")
+        r = brain_save(conn, content, "discovery", metadata={"source": "wrap"})
         memory_ids.append(r["id"])
 
     for content in (entities or []):
-        r = brain_save(conn, content, "entity")
+        r = brain_save(conn, content, "entity", metadata={"source": "wrap"})
         memory_ids.append(r["id"])
 
     # Update session record

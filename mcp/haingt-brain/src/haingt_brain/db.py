@@ -47,7 +47,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now')),
             access_count INTEGER DEFAULT 0,
-            last_accessed TEXT
+            last_accessed TEXT,
+            importance REAL DEFAULT 0.5
         );
 
         -- Knowledge graph edges
@@ -112,8 +113,41 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
     conn.commit()
 
+    # Migration: add importance column if missing (existing databases)
+    try:
+        conn.execute("ALTER TABLE memories ADD COLUMN importance REAL DEFAULT 0.5")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
+    # Backfill importance for existing memories (one-time)
+    needs_backfill = conn.execute(
+        "SELECT COUNT(*) FROM memories WHERE importance = 0.5 AND access_count > 0"
+    ).fetchone()[0]
+    if needs_backfill:
+        _backfill_importance(conn)
+
 
 def serialize_embedding(embedding: list[float]) -> bytes:
     """Convert float list to bytes for sqlite-vec."""
     import struct
     return struct.pack(f"{len(embedding)}f", *embedding)
+
+
+def _backfill_importance(conn: sqlite3.Connection) -> None:
+    """One-time backfill: set importance from type + access_count for existing memories."""
+    from .importance import BASE_IMPORTANCE, SOURCE_BOOST, compute_access_boost
+
+    rows = conn.execute("SELECT id, type, access_count, metadata FROM memories").fetchall()
+    for row in rows:
+        base = BASE_IMPORTANCE.get(row["type"], 0.5)
+        try:
+            meta = json.loads(row["metadata"]) if row["metadata"] else {}
+            source = meta.get("source")
+            if source:
+                base = max(0.0, min(1.0, base + SOURCE_BOOST.get(source, 0.0)))
+        except Exception:
+            pass
+        importance = compute_access_boost(base, row["access_count"])
+        conn.execute("UPDATE memories SET importance = ? WHERE id = ?", (importance, row["id"]))
+    conn.commit()

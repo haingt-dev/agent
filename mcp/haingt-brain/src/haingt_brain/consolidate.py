@@ -14,6 +14,8 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
         "duplicates_merged": 0,
         "patterns_decayed": 0,
         "sessions_consolidated": 0,
+        "importance_decayed": 0,
+        "weak_pruned": 0,
         "details": [],
     }
 
@@ -28,6 +30,11 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     r3 = consolidate_sessions(conn, older_than_days=30, dry_run=dry_run)
     report["sessions_consolidated"] = r3["consolidated"]
     report["details"].extend(r3["details"])
+
+    r4 = decay_importance(conn, dry_run=dry_run)
+    report["importance_decayed"] = r4["decayed"]
+    report["weak_pruned"] = r4["pruned"]
+    report["details"].extend(r4["details"])
 
     # Record consolidation timestamp
     _record_consolidation(conn)
@@ -248,6 +255,65 @@ def consolidate_sessions(
                 )
 
         result["consolidated"] += len(sessions)
+
+    if not dry_run:
+        conn.commit()
+
+    return result
+
+
+def decay_importance(
+    conn: sqlite3.Connection,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Apply Ebbinghaus time-decay to all memory importance values.
+
+    Exemptions:
+    - preference type (permanent, never decays)
+    - tool type (auto-managed by toolbox discovery)
+    - memories accessed within last 7 days (recently active)
+
+    Memories whose importance decays below 0.05 are pruned.
+    """
+    from .importance import compute_decay
+
+    result = {"decayed": 0, "pruned": 0, "details": []}
+    PRUNE_THRESHOLD = 0.05
+
+    rows = conn.execute("""
+        SELECT id, type, content, importance, access_count, last_accessed, created_at
+        FROM memories
+        WHERE type NOT IN ('preference', 'tool')
+          AND (last_accessed IS NULL OR last_accessed < datetime('now', '-7 days'))
+    """).fetchall()
+
+    for row in rows:
+        last = row["last_accessed"] or row["created_at"]
+        try:
+            dt = datetime.fromisoformat(last)
+            days = (datetime.utcnow() - dt).total_seconds() / 86400
+        except (ValueError, TypeError):
+            continue
+
+        old_imp = row["importance"] if row["importance"] is not None else 0.5
+        new_imp = compute_decay(old_imp, days)
+
+        if new_imp < PRUNE_THRESHOLD:
+            result["details"].append(
+                f"Prune [{row['type']}] \"{row['content'][:60]}\" "
+                f"(importance {old_imp:.3f} → {new_imp:.3f})"
+            )
+            if not dry_run:
+                _delete_memory(conn, row["id"])
+            result["pruned"] += 1
+        elif abs(new_imp - old_imp) > 0.01:
+            if not dry_run:
+                conn.execute(
+                    "UPDATE memories SET importance = ? WHERE id = ?",
+                    (round(new_imp, 4), row["id"]),
+                )
+            result["decayed"] += 1
 
     if not dry_run:
         conn.commit()

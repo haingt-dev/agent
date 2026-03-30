@@ -39,6 +39,12 @@ def brain_save(
     except Exception:
         pass  # fallback: store original
 
+    # Compute initial importance from type + source
+    from ..importance import compute_initial_importance
+
+    source = (metadata or {}).get("source")
+    importance = compute_initial_importance(memory_type, source)
+
     memory_id = uuid.uuid4().hex[:12]
     tags_json = json.dumps(tags or [])
     meta_json = json.dumps(metadata or {})
@@ -49,9 +55,9 @@ def brain_save(
 
     # Insert memory
     conn.execute(
-        """INSERT INTO memories (id, content, type, tags, project, metadata)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (memory_id, content, memory_type, tags_json, project, meta_json),
+        """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (memory_id, content, memory_type, tags_json, project, meta_json, importance),
     )
 
     # Insert vector
