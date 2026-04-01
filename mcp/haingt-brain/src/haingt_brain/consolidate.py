@@ -16,6 +16,7 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
         "sessions_consolidated": 0,
         "importance_decayed": 0,
         "weak_pruned": 0,
+        "clusters_synthesized": 0,
         "details": [],
     }
 
@@ -35,6 +36,10 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     report["importance_decayed"] = r4["decayed"]
     report["weak_pruned"] = r4["pruned"]
     report["details"].extend(r4["details"])
+
+    r5 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65, dry_run=dry_run)
+    report["clusters_synthesized"] = r5["synthesized"]
+    report["details"].extend(r5["details"])
 
     # Record consolidation timestamp
     _record_consolidation(conn)
@@ -326,6 +331,172 @@ def decay_importance(
         conn.commit()
 
     return result
+
+
+def cluster_and_synthesize(
+    conn: sqlite3.Connection,
+    min_cluster: int = 3,
+    sim_threshold: float = 0.65,
+    dry_run: bool = False,
+) -> dict:
+    """P3: Find clusters of related memories and synthesize into abstractions.
+
+    Groups memories by (project, type, shared tags). Within each group, finds
+    clusters of 3+ memories with high semantic similarity. Each cluster gets
+    synthesized into one abstract memory via LLM. Originals get 'part_of' relation
+    to the synthesis and their importance is halved.
+
+    Only processes non-tool, non-preference memories older than 7 days.
+    Max 3 clusters per consolidation run (LLM cost control).
+    """
+    result = {"synthesized": 0, "details": []}
+
+    # Find candidate memories (old enough, non-system types)
+    rows = conn.execute("""
+        SELECT id, content, type, tags, project, importance, created_at
+        FROM memories
+        WHERE type NOT IN ('tool', 'preference', 'session')
+          AND created_at < datetime('now', '-7 days')
+        ORDER BY project, type, created_at
+    """).fetchall()
+
+    if len(rows) < min_cluster:
+        return result
+
+    # Group by (project, type) — only cluster within same category
+    groups: dict[str, list] = {}
+    for row in rows:
+        key = f"{row['project'] or 'global'}|{row['type']}"
+        groups.setdefault(key, []).append(dict(row))
+
+    clusters_processed = 0
+
+    for group_key, members in groups.items():
+        if len(members) < min_cluster or clusters_processed >= 3:
+            continue
+
+        # Find clusters using pairwise similarity via sqlite-vec
+        # Simple greedy: pick a seed, gather neighbors above threshold
+        used = set()
+        for seed in members:
+            if seed["id"] in used:
+                continue
+
+            vec_row = conn.execute(
+                "SELECT embedding FROM memory_vectors WHERE memory_id = ?",
+                (seed["id"],),
+            ).fetchone()
+            if not vec_row:
+                continue
+
+            # Find similar memories in this group
+            cluster = [seed]
+            try:
+                neighbors = conn.execute(
+                    "SELECT memory_id, distance FROM memory_vectors WHERE embedding MATCH ? AND k = 10",
+                    (vec_row["embedding"],),
+                ).fetchall()
+            except Exception:
+                continue
+
+            member_ids = {m["id"] for m in members}
+            for nb in neighbors:
+                if nb["memory_id"] == seed["id"] or nb["memory_id"] in used:
+                    continue
+                if nb["memory_id"] not in member_ids:
+                    continue
+
+                # Compute cosine similarity
+                nb_vec = conn.execute(
+                    "SELECT embedding FROM memory_vectors WHERE memory_id = ?",
+                    (nb["memory_id"],),
+                ).fetchone()
+                if not nb_vec:
+                    continue
+
+                sim = _cosine_from_bytes(vec_row["embedding"], nb_vec["embedding"])
+                if sim >= sim_threshold:
+                    cluster.append(next(m for m in members if m["id"] == nb["memory_id"]))
+
+            if len(cluster) < min_cluster:
+                continue
+
+            # Synthesize cluster into abstract memory
+            cluster_content = "\n---\n".join(
+                f"[{m['type']}] {m['content'][:200]}" for m in cluster
+            )
+            synthesis = _synthesize_cluster(cluster_content, cluster[0]["type"], len(cluster))
+            if not synthesis:
+                continue
+
+            detail = f"Synthesize {len(cluster)} {cluster[0]['type']}s → \"{synthesis[:80]}\""
+            result["details"].append(detail)
+
+            if not dry_run:
+                from .tools.save import brain_save
+                saved = brain_save(
+                    conn, synthesis, cluster[0]["type"],
+                    tags=json.loads(cluster[0].get("tags", "[]")) + ["synthesized"],
+                    project=cluster[0]["project"],
+                    metadata={"source": "consolidation", "cluster_size": len(cluster)},
+                )
+
+                # Link originals to synthesis and halve their importance
+                for m in cluster:
+                    try:
+                        conn.execute(
+                            "INSERT OR IGNORE INTO relations VALUES (?, ?, 'part_of', 1.0, datetime('now'))",
+                            (m["id"], saved["id"]),
+                        )
+                        conn.execute(
+                            "UPDATE memories SET importance = COALESCE(importance, 0.5) * 0.5 WHERE id = ?",
+                            (m["id"],),
+                        )
+                    except Exception:
+                        pass
+                conn.commit()
+
+            for m in cluster:
+                used.add(m["id"])
+            result["synthesized"] += 1
+            clusters_processed += 1
+
+            if clusters_processed >= 3:
+                break
+
+    return result
+
+
+def _synthesize_cluster(cluster_content: str, mem_type: str, count: int) -> str | None:
+    """Use LLM to synthesize a cluster of related memories into one abstract memory."""
+    try:
+        import openai
+        import os
+
+        client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        if not client.api_key:
+            return None
+
+        response = client.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=[{
+                "role": "user",
+                "content": f"""Synthesize these {count} related {mem_type} memories into ONE concise abstract memory.
+Rules:
+- Capture the common pattern or insight across all entries
+- Be specific: include names, versions, numbers when they recur
+- Self-contained: no "the above" or "these memories"
+- Max 2-3 sentences
+
+Memories:
+{cluster_content[:2000]}"""
+            }],
+            max_tokens=150,
+            temperature=0,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
+        return None
 
 
 def should_consolidate(conn: sqlite3.Connection, interval_days: int = 7) -> bool:

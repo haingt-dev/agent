@@ -36,8 +36,8 @@ def test_initial_importance_with_source():
     assert abs(compute_initial_importance("decision", "reflect") - 0.95) < 1e-9
     # discovery (0.6) + manual (0.1) = 0.7
     assert abs(compute_initial_importance("discovery", "manual") - 0.7) < 1e-9
-    # entity (0.5) + hook (-0.05) = 0.45
-    assert abs(compute_initial_importance("entity", "hook") - 0.45) < 1e-9
+    # entity (0.5) + hook (-0.20) = 0.30
+    assert abs(compute_initial_importance("entity", "hook") - 0.30) < 1e-9
     # session (0.3) + consolidation (-0.1) = 0.2
     assert abs(compute_initial_importance("session", "consolidation") - 0.2) < 1e-9
 

@@ -86,6 +86,24 @@ Run the project's test suite.
 
 **STOP immediately if tests fail.** Do not continue.
 
+## Step 3.5: Pre-Review Brain Recall
+
+Before reviewing, check for known project patterns:
+
+```
+brain_recall(
+  query="code review patterns [project] quality issues"
+  type="pattern"
+  project=[cwd basename under ~/Projects/, e.g. "agent" for ~/Projects/agent]
+  time_range="-90 days"
+  k=5
+)
+```
+
+- If results found AND project has 3+ pattern memories: prepend "## Known Patterns" summary (max 5 bullet points) to the review context in Step 4
+- If <3 patterns or empty: silent skip — brain will accumulate over time
+- Do NOT dump raw brain output — distill into compact bullet points only
+
 ## Step 4: Review
 
 Structured code review of all changes. **READ-ONLY — do not modify files. Fixes happen before `/ship`, not during.**
@@ -180,6 +198,28 @@ Include doc updates in the main code commit (not a separate commit).
 6. If Memory Bank was updated in Step 5:
    - Stage `.memory-bank/` files
    - Create a separate commit: `docs: update memory bank`
+
+## Step 7.5: Post-Commit Brain Save
+
+Save to brain only when one of these conditions is true:
+
+a) **Critical issue found** in Step 4 review → save immediately
+b) **Warning-class issue** that already exists as a brain pattern for this project → save recurrence
+c) **`--learn` flag** passed by user → save all Warning-level findings from Step 4
+
+Default (no flag, no Critical, no recurrence): do NOT save.
+
+```
+brain_save(
+  content: "Code pattern [project]: [description]. Severity: [critical/warning]. Recurrence: [N]."
+  type: "pattern"
+  tags: ["code-review", "[language]", "ship"]
+  project: [auto-detected]
+  metadata: {"source": "ship", "severity": "...", "recurrence": N, "commit": "[short-hash]"}
+)
+```
+
+Do NOT save: info-level findings, linting results, things handled by pre-commit hooks.
 
 **Verify success:**
 - Run `git log --oneline -1` — confirm hash and message

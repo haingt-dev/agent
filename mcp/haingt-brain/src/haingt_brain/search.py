@@ -59,11 +59,11 @@ def hybrid_search(
         FULL OUTER JOIN vec_results v ON f.memory_id = v.memory_id
     )
     SELECT m.*,
-           s.rrf_score * (0.7 + 0.3 * COALESCE(m.importance, 0.5)) AS rrf_score
+           s.rrf_score * (0.5 + 0.5 * COALESCE(m.importance, 0.5)) AS rrf_score
     FROM scored s
     JOIN memories m ON m.id = s.memory_id
     WHERE {where_clause}
-    ORDER BY s.rrf_score * (0.7 + 0.3 * COALESCE(m.importance, 0.5)) DESC
+    ORDER BY s.rrf_score * (0.5 + 0.5 * COALESCE(m.importance, 0.5)) DESC
     LIMIT :k
     """
 
@@ -76,13 +76,12 @@ def hybrid_search(
         rows = vector_search(conn, query_embedding, memory_type, project, k)
         return rows
 
-    # Update access counts + mild importance boost per access
+    # Update access counts (importance NOT boosted — breaks positive feedback loop)
     for row in rows:
         conn.execute(
             """UPDATE memories
                SET access_count = access_count + 1,
-                   last_accessed = datetime('now'),
-                   importance = MIN(1.0, COALESCE(importance, 0.5) + 0.02)
+                   last_accessed = datetime('now')
                WHERE id = ?""",
             (row["id"],),
         )
@@ -129,8 +128,7 @@ def vector_search(
         conn.execute(
             """UPDATE memories
                SET access_count = access_count + 1,
-                   last_accessed = datetime('now'),
-                   importance = MIN(1.0, COALESCE(importance, 0.5) + 0.02)
+                   last_accessed = datetime('now')
                WHERE id = ?""",
             (row["id"],),
         )

@@ -262,6 +262,8 @@ ORDER BY s.rrf_score DESC LIMIT :k
 ### PostToolUse → `post-tool-use.sh` + `search-and-store.py`
 - **Trigger**: After WebSearch, WebFetch, or Context7 query-docs completes
 - **Input**: `{"tool_name": "...", "tool_input": {...}, "tool_result": "..."}`
+- **P1 Entropy filter**: Skip if content <80 chars or cosine sim ≥0.75 with existing memory
+- **P2 Atomic decomposition**: LLM distills raw results into 1-3 self-contained facts (gpt-4.1-nano)
 - **Action**: Parse result → write to brain.db as type=discovery, tags=[tool_type, "auto-captured"]
 - **Embedding**: Attempted via brain venv Python (graceful fail → FTS-only is still useful)
 - **Output**: Reminder to brain_save for deeper analysis
@@ -279,7 +281,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
 
 ## 7. Consolidation
 
-Three strategies, all in `consolidate.py`:
+Five strategies, all in `consolidate.py`:
 
 ### merge_duplicates (threshold=0.80)
 - For each non-tool memory: sqlite-vec ANN search k=6 neighbors
@@ -296,9 +298,23 @@ Three strategies, all in `consolidate.py`:
 - Merge into weekly-digest memory (type=session)
 - Original session records kept in sessions table (audit trail)
 
+### decay_importance (Ebbinghaus)
+- Apply exponential decay to all memory importance values (except preference, tool)
+- Exempt: memories accessed within last 7 days
+- Memories below 0.05 importance → auto-pruned
+- Graph boost: hub memories (5+ connections) resist decay via `compute_graph_boost()`
+- No positive feedback: access updates `last_accessed` but does NOT boost importance
+
+### cluster_and_synthesize (P3 — recursive consolidation)
+- Group memories by (project, type), find clusters of 3+ with cosine sim ≥ 0.65
+- LLM synthesizes cluster into one abstract memory (via gpt-4.1-nano)
+- Originals get `part_of` relation to synthesis, importance halved
+- Only processes memories >7 days old. Max 3 clusters per run (LLM cost control)
+
 ### Auto-trigger
 - `brain_session("start")` checks `brain_meta.last_consolidation`
-- If >7 days since last run → `consolidate_all()` automatically
+- If >3 days since last run → `consolidate_all()` automatically
+- `brain_session("save")` triggers `cluster_and_synthesize` if 3+ memories created
 - Timestamp recorded in `brain_meta` after each run
 
 ## 8. Memory Types
@@ -462,7 +478,7 @@ Context approaching limit → /compact triggered
 | `scripts/brain-context.py` | Direct SQLite read → decisions, preferences, last session |
 | `scripts/prompt-context.py` | Per-prompt hybrid RRF + Semantic Toolbox, dedup, token caps |
 | `scripts/post-tool-use.sh` | PostToolUse router → search-and-store.py |
-| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results to brain.db |
+| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results — entropy filter + LLM distillation |
 | `scripts/pre-compact.sh` | PreCompact router → pre-compact-snapshot.py |
 | `scripts/pre-compact-snapshot.py` | 4-category structured extraction → brain.db + cache reset |
 | `scripts/entity-extract.py` | Stop hook: regex entity extraction → brain.db type=entity |

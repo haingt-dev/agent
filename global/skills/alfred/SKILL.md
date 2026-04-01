@@ -26,7 +26,7 @@ Read Google Calendar + Todoist, then propose schedule changes using science-base
 
 **Mode 1: Add event + replan** — User provides a new event/constraint. Create event AND cascade changes.
 **Mode 2: Optimize day** — Keywords "optimize", "replan", "sắp xếp", "tối ưu". No new event — rearrange existing. Materializes schedule to calendar.
-**Mode 3: Cleanup** — Keywords "cleanup", "reschedule", "dọn", "skip". Triage today's quests: mark done or reschedule to next occurrence.
+**Mode 3: Cleanup / Audit** — Keywords "cleanup", "reschedule", "dọn", "skip". Sub-mode "audit" (keywords "audit", "health check", "kiểm tra"): full Todoist structure verification. Triage today's quests: mark done or reschedule to next occurrence.
 **Mode 4: Add Quest** — Keywords "quest", "task", "thêm task", "add", "tạo", or task-like content (no time, no location, no date-specific constraint). Classifies + creates in Todoist. Optionally materializes to calendar if today/tomorrow.
 **Mode 5: Weekly Review** — Keywords "review", "weekly", "review tuần". Pull Todoist completed + carried over tasks, update existing Obsidian weekly note with review section.
 
@@ -44,6 +44,17 @@ Read Google Calendar + Todoist, then propose schedule changes using science-base
 
 > Read `references/todoist-structure.md` — full labels (energy + topic), priority convention, daily habits reference. Read when creating/updating tasks.
 
+## Step 0: Pre-flight Brain Check (Mode 2 + Mode 5 only)
+
+Skip for Mode 1 (add event), Mode 3 (cleanup), Mode 4 (add quest) — context is already dense enough.
+
+For Mode 2 (Optimize) and Mode 5 (Weekly Review):
+- `brain_recall(query="schedule patterns [day-type] [user-modifications]", type="pattern", project="digital-identity", time_range="-90 days", k=5)`
+- Day-type: "weekday"/"weekend"/"early-wake"/"late-wake" — infer from wake time detection in Step 3
+- If results found: note patterns as soft constraints (not overrides) during proposal building
+- If empty: proceed normally — brain will accumulate patterns over time
+- NEVER let recalled patterns override science-engine rules — science is the floor, patterns are refinements
+
 ## Step 1: Parse Input
 
 Extract from `$ARGUMENTS` and user message:
@@ -52,7 +63,7 @@ Extract from `$ARGUMENTS` and user message:
 - **Mode**: detect from keywords:
   - Mode 1 (default for event-like input): has time, location, or date-specific constraint
   - Mode 2: optimize, replan, sắp xếp, tối ưu
-  - Mode 3: cleanup, reschedule, dọn, skip
+  - Mode 3: cleanup, reschedule, dọn, skip, audit, health check, kiểm tra
   - Mode 4: quest, task, thêm task, add, tạo — or task-like content without time/location
 
 **Routing:**
@@ -107,6 +118,13 @@ Use **NOW** (from Step 2) to split the day:
 
 **Important:** The skeleton SHIFTS based on wake time. All scheduling is relative to W (wake time).
 
+**Late wake detection (shifted day):**
+- If NOW > 09:00 AND all morning events (06:00-09:00) are past with none in-progress → infer late wake
+- Set W = NOW. Recalculate all offsets. Morning recurring events: mark PAST, do NOT delete (recurring auto-advances)
+- Auto-warn: "Late wake (W={NOW}). Compressed schedule — max {N} deep blocks."
+- Cold brew: if W+90min already reasonable, use it. Otherwise first sip = NOW+30min minimum. Last sip bed-6h still applies.
+- If previous night calendar had events past 23:00 → flag: "Second wind pattern — prioritize sleep reset tonight."
+
 **Contradiction check:** Scan existing calendar events for conflicts with known patterns:
 - Lunch/meal events during IF fasting window → flag as outdated
 - Sleep events that don't match calculated bedtime → suggest updating
@@ -135,6 +153,16 @@ Use **NOW** (from Step 2) to split the day:
 5. 💡 **Tips** — suggestions that don't need action (đọc sách trên xe, etc.)
 
 **Deadline override:** Tasks with `deadlineDate` within 48h move up one tier in scheduling priority. Alfred flags these with ⚠️ in the proposal.
+
+### Upwork Evening Block
+
+When optimizing an evening (Mode 2 for today/tomorrow) on **Mon-Thu**:
+- Schedule `⚔️ Upwork Daily` at **21:00-22:30** (90 min) — US 9AM-10:30AM EST, peak fresh job window.
+- Classification: Main Quests / 💰 Income, `high_energy` (diagnostic thinking for proposals), `execute` phase.
+- Uses night owl second wind (science-engine.md) — after 21:00, Hải is alert and timing aligns with US morning posts.
+- If vợ time extends past 21:00 → shift to 21:30-23:00.
+- If early wake tomorrow (<06:00) → skip (bed anchored to 21:00).
+- **Fri-Sun**: do not auto-schedule. Weekends = reply day, not search day.
 
 ### Constraint Cascade Logic
 
@@ -168,8 +196,13 @@ When a new event conflicts with existing anchors:
 | Deep work protection blocks | Calendar `[alfred]` | `gcal_create_event` with `[alfred]` in description |
 | Exercise time blocks | Calendar `[alfred]` | Time placement block, not a Todoist task |
 | Wind-down / screens off | Calendar `[alfred]` | Behavioral anchor, calendar-only |
+| Reminders for timed tasks | Todoist reminders | `add-reminders` after setting timed due |
 
-**Reminders:** Handled by Todoist app default (10 min before any timed task). No per-task reminder logic needed in Alfred. Blocked on [Todoist MCP issue #92](https://github.com/Doist/todoist-ai/issues/92) — `dueString` doesn't support `!` reminder shorthand, and MCP has no `reminders` parameter. Re-enable when shipped.
+**Reminders:** After materializing a task with timed due, add reminder via `add-reminders`:
+- Default: `relative` type, `minuteOffset: 10`, `service: "push"`
+- Deadline tasks (within 48h): add second reminder at `minuteOffset: 60` (1h heads-up)
+- Prove-phase tasks in PEAK window: `minuteOffset: 0` (immediate nudge)
+- Batch up to 25 reminders per call. Requires `taskId` from task creation/fetch response.
 
 **Calendar-only event format:**
 ```
@@ -196,6 +229,8 @@ Use `calendarId` and `id` (eventId) from Step 2's `gcal_list_events` response fo
 - `gcal_update_event` for ✏️ MOVE — use original event's `calendarId` + `id`
 - `gcal_delete_event` for ❌ DELETE — use original event's `calendarId` + `id`
 
+**⚠️ Recurring event safety:** Events with `recurringEventId` field are instances of a recurring series. `gcal_delete_event` on these deletes the ENTIRE series. For past instances: do nothing (already resolved). For future instances to skip: leave alone. Only delete non-recurring events or `[alfred]`-marked blocks.
+
 ### Todoist Changes — Materialization
 
 **For Todoist tasks scheduled for today/tomorrow:**
@@ -212,6 +247,11 @@ Use `calendarId` and `id` (eventId) from Step 2's `gcal_list_events` response fo
 - ➕ ADD: `add-tasks` — follow classification tree in Mode 4
 - ✏️ METADATA only (labels, priority, description, duration): `update-tasks` — safe, no date change
 
+**For reminders (after materialization):**
+- Collect all taskIds that got timed dues this execution
+- Batch `add-reminders`: type `relative`, minuteOffset `10`, service `push`
+- Deadline tasks within 48h: add extra reminder minuteOffset `60`
+
 ### Mode 2 Optimization — Update in Place
 
 When optimizing (Mode 2), prefer updating existing events over delete-recreate:
@@ -226,6 +266,25 @@ When optimizing (Mode 2), prefer updating existing events over delete-recreate:
 ### Post-Execute
 - Recap all changes made (gcal + Todoist)
 - Show final schedule view
+
+### Post-Execute: Deviation Save
+
+Save to brain ONLY when the user modified the proposal (chose "Approve with changes" in Step 6):
+
+```
+brain_save(
+  content: "Schedule deviation [date]: User changed [what] from [proposed] to [actual]. Day-type: [type]. Reason: [if stated]"
+  type: "pattern"
+  tags: ["schedule", "alfred", "[day-type]", "[mode]"]
+  project: "digital-identity"
+  metadata: {"source": "alfred", "phase": "[current-phase]", "day_type": "[weekday/weekend/early-wake/late-wake]"}
+)
+```
+
+Do NOT save when:
+- User approved proposal as-is (zero signal — default worked)
+- User cancelled (no execution happened)
+- Cleanup mode (Mode 3) — task completion is not a scheduling pattern
 
 ## Mode 3: Cleanup
 
@@ -242,6 +301,12 @@ When optimizing (Mode 2), prefer updating existing events over delete-recreate:
 - NEVER `complete-tasks` for rescheduled tasks — use `reschedule-tasks`
 - Non-recurring tasks: ask what date to move to, don't auto-reschedule
 - Daily habits are calendar recurring — not part of cleanup
+
+### Mode 3 Sub-Mode: Audit
+
+Keywords: "audit", "health check", "kiểm tra". Full Todoist structure verification.
+
+> Read `references/mode-details.md` — full audit procedure (steps A1-A4).
 
 ## Mode 4: Add Quest Flow
 
@@ -366,3 +431,4 @@ These examples are the classification ground truth — follow them exactly when 
 - If a day is too packed, say so — don't cram everything in
 - Use Vietnamese-English mix naturally
 - **NEVER use `update-tasks` to change dates on recurring tasks** — destroys recurrence. Check `recurring` field first. Recurring → `reschedule-tasks`. Non-recurring → `update-tasks` is safe.
+- **NEVER `gcal_delete_event` on recurring calendar events** — check for `recurringEventId` field. If present → skip (past) or leave alone (future). Only delete `[alfred]`-marked non-recurring blocks.

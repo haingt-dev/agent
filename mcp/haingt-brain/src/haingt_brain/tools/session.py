@@ -25,7 +25,7 @@ def brain_session_start(conn: sqlite3.Connection, project: str | None = None) ->
     consolidation_report = None
     try:
         from ..consolidate import should_consolidate, consolidate_all
-        if should_consolidate(conn, interval_days=7):
+        if should_consolidate(conn, interval_days=3):
             consolidation_report = consolidate_all(conn)
     except Exception:
         pass  # Don't let consolidation failure block session start
@@ -170,6 +170,21 @@ def brain_session_save(
         except Exception:
             pass
 
+    # P4: Session-end auto-consolidation — if this session created 3+ memories
+    # on similar topics, offer to consolidate them into a summary
+    auto_consolidated = 0
+    if len(memory_ids) >= 3:
+        try:
+            from ..consolidate import cluster_and_synthesize
+            r = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.70)
+            auto_consolidated = r.get("synthesized", 0)
+            if auto_consolidated > 0:
+                suggestions.append(
+                    f"Auto-consolidated {auto_consolidated} cluster(s) from this session"
+                )
+        except Exception:
+            pass
+
     result = {
         "status": "saved",
         "session_id": session_id,
@@ -177,6 +192,8 @@ def brain_session_save(
         "memories_created": len(memory_ids),
         "memory_ids": memory_ids,
     }
+    if auto_consolidated:
+        result["auto_consolidated"] = auto_consolidated
     if suggestions:
         result["suggestions"] = suggestions
     return result

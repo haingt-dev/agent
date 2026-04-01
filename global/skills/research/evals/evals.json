@@ -3,24 +3,42 @@
   "evals": [
     {
       "id": 0,
-      "name": "investigate-mcp-auth",
-      "prompt": "research best practices for MCP server authentication",
-      "expected_output": "Structured decision brief with key findings from web + docs, profile fit section referencing roadmap/brick, clear recommendation, sources list",
-      "files": []
+      "name": "investigate-godot-mcp",
+      "prompt": "research godot mcp server best practices — what patterns do successful Godot MCP integrations follow?",
+      "expected_output": "Structured decision brief. Should use brain_graph + brain_tools in gather phase. Should surface existing Godot-related tools/skills. Should save with metadata and project scoping.",
+      "files": [],
+      "assertions": [
+        {"text": "Uses brain_graph or brain_tools during gather phase", "type": "tool_usage"},
+        {"text": "Output includes clear recommendation with sources", "type": "quality"},
+        {"text": "Profile fit section references ecosystem thesis or active brick", "type": "content"},
+        {"text": "Auto-save mentions confidence level", "type": "content"}
+      ]
     },
     {
       "id": 1,
-      "name": "compare-bun-node",
-      "prompt": "research Bun vs Node.js for building MCP servers",
-      "expected_output": "Comparison table with dimensions (performance, ecosystem, learning curve, ecosystem fit), clear winner verdict, profile fit section",
-      "files": []
+      "name": "compare-n8n-temporal",
+      "prompt": "research n8n vs temporal for orchestrating indie game dev build pipelines",
+      "expected_output": "Comparison table with dimensions. Winner declared. Profile filter evaluates against ecosystem thesis. Brain-enriched save with metadata.",
+      "files": [],
+      "assertions": [
+        {"text": "Contains comparison table with multiple dimensions", "type": "content"},
+        {"text": "Declares a winner with reasoning", "type": "quality"},
+        {"text": "References career anchors, ecosystem, or current phase", "type": "content"},
+        {"text": "Auto-save includes metadata (confidence, mode, source_count)", "type": "tool_usage"}
+      ]
     },
     {
       "id": 2,
-      "name": "validate-remotion",
-      "prompt": "research validate: using Remotion for game trailer production as a service",
-      "expected_output": "Failure modes section with specific risks, confidence rating (HIGH/MEDIUM/LOW), adversarial analysis, profile fit against Brick D",
-      "files": []
+      "name": "validate-readwise-sync",
+      "prompt": "research validate: is building a Readwise-to-brain sync pipeline worth the effort right now?",
+      "expected_output": "Validate mode with failure modes. Confidence rating. Phase-capacity-aware. Should check brain for prior Readwise decisions via targeted recall.",
+      "files": [],
+      "assertions": [
+        {"text": "Lists specific failure modes / risks", "type": "content"},
+        {"text": "States HIGH/MEDIUM/LOW confidence with reasoning", "type": "content"},
+        {"text": "References current phase capacity or timing constraints", "type": "content"},
+        {"text": "Uses type or time_range filtering on brain_recall", "type": "tool_usage"}
+      ]
     }
   ]
 }

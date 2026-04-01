@@ -20,7 +20,7 @@ SOURCE_BOOST: dict[str, float] = {
     "mentor": 0.1,  # /mentor insights
     "research": 0.05,  # /research findings
     "wrap": 0.0,  # /wrap auto-save = baseline
-    "hook": -0.05,  # Auto-captured by hooks
+    "hook": -0.20,  # Auto-captured by hooks (below entity level)
     "consolidation": -0.1,  # System-generated digests
 }
 

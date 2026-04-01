@@ -11,7 +11,9 @@ allowed-tools: >
   mcp__claude_ai_Context7__resolve-library-id,
   mcp__claude_ai_Context7__query-docs,
   mcp__haingt-brain__brain_recall,
-  mcp__haingt-brain__brain_save
+  mcp__haingt-brain__brain_save,
+  mcp__haingt-brain__brain_graph,
+  mcp__haingt-brain__brain_tools
 ---
 
 # Research — Multi-Source Decision Intelligence
@@ -38,6 +40,8 @@ Run once per session, not per invocation:
 3. If brain results are thin or stale → fall back to reading `profile/roadmap.md` and `profile/goals.md`
 
 These data points drive the Profile Filter step in every research run.
+
+**Project scoping:** Auto-detect project from cwd (directory name under `~/Projects/`). Pass `project` parameter on brain_recall/brain_graph when researching project-specific topics. Omit for general topics (career, market, tooling).
 
 ## Mode Routing
 
@@ -66,13 +70,15 @@ Extract from `$ARGUMENTS` and conversation context:
 
 ### Step 2: Cache Check
 
-Search brain for prior research on this topic:
+Search brain for prior research on this topic with precise filtering:
 
 ```
-brain_recall("research [topic]")
+brain_recall(query="research [topic]", type="discovery", time_range="-30 days")
 ```
 
-If a result exists and is < 30 days old:
+Using `type="discovery"` avoids noise from session summaries or entity records. The `time_range` ensures only recent findings surface — stale research (>30 days) is treated as absent.
+
+If a result exists:
 - Surface the cached findings
 - `AskUserQuestion`: "Found prior research from [date]. Use cached findings, or run fresh research?"
 - If cached is accepted → skip to Step 6 (output) with cached data
@@ -91,6 +97,13 @@ brain_recall("[topic variations]")
 brain_recall("[broader context]")
 ```
 Look for: related decisions, past trade-off analysis, any prior art. Readwise knowledge worth keeping should already be here via `/inbox`.
+
+**3a+. brain_graph + brain_tools** (conditional — skip both if topic is new to brain or non-technical):
+
+Only run these when the **cache check (Step 2) found prior research** or the topic involves **tools/libraries/workflows**. When the brain is sparse for a topic, these steps return noise that dilutes synthesis quality. Better to spend that attention budget on deeper web research and sharper profile filtering.
+
+- `brain_graph(entity="[prior-research-id or topic]", depth=2)` — traverse relationships from prior findings. Surfaces chains like: decision → pattern → related discovery. Only valuable when a starting node exists.
+- `brain_tools(query="[topic]", k=3)` — check if an existing tool/skill already handles this. If found → mention it: "Note: `[tool/skill]` may already handle this." Skip for career/market/personal decisions.
 
 **3b. chub** (conditional) — only when the topic involves a library, framework, or SDK:
 ```bash
@@ -140,25 +153,35 @@ If a finding is technically correct but misaligned → include it in output with
 
 Format varies by mode. See Output Formats section below.
 
-### Step 7: Gate
+### Step 7: Auto-Save
 
-After presenting findings:
-```
-AskUserQuestion: "Save key findings to memory for future reference?"
-Options: Yes / No
-```
-Never auto-save. Hai decides what enters long-term memory.
-
-### Step 8: Save (on approval)
+Save findings automatically after presenting output — no gate, no confirmation needed.
 
 ```
 brain_save(
   content: "Research: [topic] — [verdict]. Key evidence: [1-2 lines]. Profile: [alignment]. Sources: [count]"
   type: "discovery"
   tags: ["research", "[topic-tag]", "[mode]"]
-  project: null
+  project: [auto-detected or null]
+  metadata: {
+    "source": "research",
+    "confidence": "high|medium|low",
+    "mode": "investigate|compare|validate",
+    "source_count": N,
+    "freshest_source": "YYYY-MM-DD"
+  }
+  relations: [if prior research on same topic found in Step 2]
+    {target_id: "[prior-memory-id]", relation_type: "supersedes"}
 )
 ```
+
+**Relations logic:** If Step 2 found a cached finding that was overridden (user chose fresh research), save the new finding with `supersedes` relation pointing to the old one. This builds a research history chain navigable via `brain_graph`.
+
+**Confidence mapping:** HIGH = 3+ concordant sources, recent data. MEDIUM = mixed signals or limited sources. LOW = single source, dated, or speculative.
+
+Append to output: `Saved to brain: "[topic] — [verdict]" (confidence: [level])`
+
+Hải can remove later with `brain_forget` if the finding turns out to be noise.
 
 ---
 
@@ -238,6 +261,6 @@ Same structure but add before Recommendation:
 - **chub before Context7.** For library/framework docs, check `chub search` first — it's local and curated. Only fall back to Context7 when chub has no coverage for the library.
 - **WebFetch is targeted.** Only fetch full pages when a search snippet is clearly incomplete and the full content is load-bearing for the verdict. Max 2-3 fetches per run.
 - **Profile filter informs, not censors.** If something is technically good but contextually wrong for Hai right now, include it with a clear flag. Don't silently drop findings.
-- **Gate before save.** Never auto-save to brain. Always ask first.
+- **Auto-save, no gate.** Save findings to brain automatically after output. Report what was saved. Hải can `brain_forget` if it's noise — less friction than asking every time.
 - **Concise output.** Decision brief should be scannable — 60-80 lines target. Raw source material never goes verbatim into output.
 - **When to use Opus.** For complex decisions with many conflicting sources, or high-stakes architectural choices, consider switching to Opus before invoking `/research`. The skill runs on whatever model is active — Sonnet handles 90% of cases, Opus is worth it for the hard 10%.
