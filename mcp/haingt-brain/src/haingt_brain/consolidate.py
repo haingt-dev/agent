@@ -2,12 +2,52 @@
 
 import glob
 import json
+import os
 import sqlite3
 import struct
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from .db import serialize_embedding
+
+LOCK_FILE = Path.home() / ".local/share/haingt-brain/.consolidation_lock"
+LOCK_STALE_SECONDS = 3600  # 1 hour — same as Claude Code
+
+
+def _acquire_lock() -> bool:
+    """Try to acquire consolidation lock. Returns True if acquired."""
+    try:
+        if LOCK_FILE.exists():
+            # Check if stale
+            age = time.time() - LOCK_FILE.stat().st_mtime
+            if age < LOCK_STALE_SECONDS:
+                # Check if PID is alive
+                try:
+                    pid = int(LOCK_FILE.read_text().strip())
+                    os.kill(pid, 0)  # Signal 0 = check if alive
+                    return False  # Lock held by live process
+                except (ValueError, ProcessLookupError, PermissionError):
+                    pass  # PID dead or invalid — treat as stale
+            # Stale lock — overwrite
+
+        # Acquire lock
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        LOCK_FILE.write_text(str(os.getpid()))
+        return True
+    except Exception:
+        return True  # On any error, allow consolidation (fail-open)
+
+
+def _release_lock() -> None:
+    """Release consolidation lock."""
+    try:
+        if LOCK_FILE.exists():
+            pid = int(LOCK_FILE.read_text().strip())
+            if pid == os.getpid():
+                LOCK_FILE.unlink()
+    except Exception:
+        pass  # Best effort cleanup
 
 
 def _get_meta_int(conn: sqlite3.Connection, key: str, default: int = 0) -> int:
@@ -26,32 +66,42 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
 def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     """Run all consolidation strategies. Returns a report of actions taken.
 
-    Includes a circuit breaker: if consolidation has failed 3+ consecutive times,
+    Includes a file-based lock (before circuit breaker) to prevent concurrent runs,
+    and a circuit breaker: if consolidation has failed 3+ consecutive times,
     it skips execution and returns a circuit_breaker_open status. The failure count
     resets on success.
     """
-    # Circuit breaker check
-    failures = _get_meta_int(conn, "consolidation_failures", 0)
-    if failures >= 3:
-        return {
-            "status": "circuit_breaker_open",
-            "message": (
-                f"Consolidation disabled after {failures} consecutive failures. "
-                "Reset with brain_session('consolidate')."
-            ),
-        }
+    # File-based lock: prevent concurrent consolidation across sessions
+    if not dry_run:
+        if not _acquire_lock():
+            return {"status": "locked", "message": "Another consolidation is in progress"}
 
     try:
-        result = _do_consolidate_all(conn, dry_run)
+        # Circuit breaker check
+        failures = _get_meta_int(conn, "consolidation_failures", 0)
+        if failures >= 3:
+            return {
+                "status": "circuit_breaker_open",
+                "message": (
+                    f"Consolidation disabled after {failures} consecutive failures. "
+                    "Reset with brain_session('consolidate')."
+                ),
+            }
+
+        try:
+            result = _do_consolidate_all(conn, dry_run)
+            if not dry_run:
+                _set_meta(conn, "consolidation_failures", "0")
+                conn.commit()
+            return result
+        except Exception:
+            if not dry_run:
+                _set_meta(conn, "consolidation_failures", str(failures + 1))
+                conn.commit()
+            raise
+    finally:
         if not dry_run:
-            _set_meta(conn, "consolidation_failures", "0")
-            conn.commit()
-        return result
-    except Exception:
-        if not dry_run:
-            _set_meta(conn, "consolidation_failures", str(failures + 1))
-            conn.commit()
-        raise
+            _release_lock()
 
 
 def _do_consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
