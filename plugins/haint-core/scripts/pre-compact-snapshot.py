@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """PreCompact: Structured snapshot of conversation state before compaction.
 
-Reads transcript_path JSONL, extracts 4 structured categories
-(Technical, Emotional, Entities, Actions) via regex, plus a conversation tail.
-Writes structured snapshot to brain.db as type="session".
-No LLM needed — pattern matching only (0 tokens).
+Reads transcript_path JSONL, extracts 9 structured sections aligned with
+Claude Code's compact prompt format. Writes structured snapshot to brain.db
+as type="session". No LLM needed — pattern matching only (0 tokens).
 
-Categories (from Building Memory-Aware Agents course L4):
-- Technical: decisions, discoveries, bug fixes, architecture choices
-- Emotional: frustration, uncertainty, breakthrough, blockers
-- Entities: ecosystem projects, skills, technologies mentioned
-- Actions: TODOs, commitments, next steps, blockers
+Sections (CC-aligned compact format):
+1. Primary Request and Intent   — main goal from early user messages
+2. Key Technical Concepts       — patterns, architecture, concepts discussed
+3. Files and Code Sections      — file paths touched via tool_use blocks
+4. Errors and Fixes             — error messages, stack traces, fixes applied
+5. Problem Solving              — decisions, discoveries, root cause analysis
+6. All User Messages            — non-tool-use user messages (conversation tail)
+7. Pending Tasks                — TODOs, commitments, next steps
+8. Current Work                 — what was actively being done (last assistant msgs)
+9. Optional Next Step           — last action signal or explicit "next step"
 """
 
 import json
@@ -57,25 +61,24 @@ TECHNICAL_PATTERNS = [
     (TECHNICAL_EXTRA, "technical"),
 ]
 
-# ── Emotional signal patterns ─────────────────────────────────────────────
+# ── Error signal patterns ─────────────────────────────────────────────────
 
-EMOTIONAL_SIGNALS = re.compile(
-    # Frustration
-    r"(?:this is (?:really |so )?(?:frustrating|annoying|painful|broken))"
-    r"|(?:i(?:'m| am) (?:confused|lost|stuck|not sure|unsure|frustrated))"
-    r"|(?:(?:why|how) (?:does|is|would) this (?:even )?(?:work|not work|happen))"
-    # Uncertainty
-    r"|(?:not (?:sure|certain|confident) (?:if|whether|about|why))"
-    r"|(?:(?:might|maybe|perhaps) (?:worth|better|easier))"
-    # Breakthrough
-    r"|(?:this (?:actually )?(?:works?|clicked|makes sense now))"
-    r"|(?:(?:ah|oh|wait)[,.]? (?:right|yes|ok|got it|that'?s? (?:it|why|how)))"
-    r"|(?:(?:finally|at last)[.!,])"
-    # Blocker
-    r"|(?:(?:can'?t|cannot|won'?t|doesn'?t) (?:work|run|compile|connect)(?:\s+at all)?)"
-    r"|(?:blocked (?:on|by)|blocking issue)",
+ERROR_SIGNALS = re.compile(
+    r"error|Error|ERROR|traceback|Traceback|exception|Exception|"
+    r"failed|FAILED|✗|❌|exit code [1-9]|non-zero",
     re.IGNORECASE,
 )
+
+FIX_SIGNALS = re.compile(
+    r"(?:fixed (?:by|in|with|the)|the fix is|resolved (?:by|with)|solution[: ])"
+    r"|(?:patch(?:ed)?|workaround|corrected|adjusted)",
+    re.IGNORECASE,
+)
+
+ERROR_PATTERNS = [
+    (ERROR_SIGNALS, "error"),
+    (FIX_SIGNALS, "fix"),
+]
 
 # ── Action signal patterns ────────────────────────────────────────────────
 
@@ -95,6 +98,18 @@ ACTION_SIGNALS = re.compile(
     r"|(?:before (?:we can|i can|this (?:can|will)) (?:proceed|continue|move|work))",
     re.IGNORECASE,
 )
+
+NEXT_STEP_SIGNALS = re.compile(
+    r"(?:next (?:step|up|thing|task)[: ]|after this[,: ]|once (?:this|that) (?:is |'?s )?done)"
+    r"|(?:then (?:we(?:'ll| will| can)?|i(?:'ll| will| can)?) (?:move|proceed|continue|work))"
+    r"|(?:the (?:last|final|next) (?:thing|step|task))",
+    re.IGNORECASE,
+)
+
+# ── File tool patterns ────────────────────────────────────────────────────
+
+FILE_TOOL_PATTERN = re.compile(r'"(?:file_path|path)":\s*"([^"]+)"')
+FILE_TOOLS = {"Read", "Edit", "Write", "Glob", "mcp__bash__bash"}
 
 # ── Entity patterns (copied from entity-extract.py — keep in sync) ───────
 
@@ -143,11 +158,24 @@ def get_hook_input() -> dict | None:
         return None
 
 
-def parse_transcript(transcript_path: str) -> tuple[list[dict], list[dict], list[tuple[int, str]]]:
-    """Single-pass transcript parse. Returns (messages, brain_saves, assistant_chunks)."""
+def parse_transcript(
+    transcript_path: str,
+) -> tuple[list[dict], list[dict], list[tuple[int, str]], list[str], list[tuple[int, str]]]:
+    """Single-pass transcript parse.
+
+    Returns:
+        messages         — all non-system messages (role, content)
+        brain_saves      — detected brain_save tool_use calls
+        assistant_chunks — (line_num, text) from assistant text blocks
+        file_paths       — unique file paths from tool_use inputs
+        user_chunks      — (line_num, text) from user text blocks (non-tool)
+    """
     messages = []
     saves = []
     chunks = []
+    file_paths_seen: list[str] = []
+    file_paths_set: set[str] = set()
+    user_chunks: list[tuple[int, str]] = []
 
     try:
         with open(transcript_path) as f:
@@ -169,23 +197,54 @@ def parse_transcript(transcript_path: str) -> tuple[list[dict], list[dict], list
                     for item in content:
                         if not isinstance(item, dict):
                             continue
-                        if item.get("type") == "text":
-                            text_parts.append(item.get("text", ""))
+                        item_type = item.get("type")
+
+                        if item_type == "text":
+                            text = item.get("text", "")
+                            text_parts.append(text)
                             if msg_type == "assistant":
-                                chunks.append((line_num, item.get("text", "")))
-                        elif (msg_type == "assistant"
-                              and item.get("type") == "tool_use"
-                              and item.get("name") == "mcp__haingt-brain__brain_save"):
+                                chunks.append((line_num, text))
+                            elif msg_type == "user":
+                                user_chunks.append((line_num, text))
+
+                        elif msg_type == "assistant" and item_type == "tool_use":
+                            tool_name = item.get("name", "")
                             inp = item.get("input", {})
-                            saves.append({
-                                "content": inp.get("content", "")[:500],
-                                "type": inp.get("type", "unknown"),
-                                "line": line_num,
-                            })
+
+                            # brain_save tracking
+                            if tool_name == "mcp__haingt-brain__brain_save":
+                                saves.append({
+                                    "content": inp.get("content", "")[:500],
+                                    "type": inp.get("type", "unknown"),
+                                    "line": line_num,
+                                })
+
+                            # File path extraction from tool inputs
+                            inp_str = json.dumps(inp)
+                            for m in FILE_TOOL_PATTERN.finditer(inp_str):
+                                fp = m.group(1)
+                                if fp and fp not in file_paths_set:
+                                    file_paths_set.add(fp)
+                                    file_paths_seen.append(fp)
+
+                        elif msg_type == "user" and item_type == "tool_result":
+                            # tool_result content can contain file paths too
+                            result_content = item.get("content", "")
+                            if isinstance(result_content, list):
+                                for rc in result_content:
+                                    if isinstance(rc, dict) and rc.get("type") == "text":
+                                        for m in FILE_TOOL_PATTERN.finditer(rc.get("text", "")):
+                                            fp = m.group(1)
+                                            if fp and fp not in file_paths_set:
+                                                file_paths_set.add(fp)
+                                                file_paths_seen.append(fp)
+
                     content = "\n".join(text_parts)
                 elif isinstance(content, str):
                     if msg_type == "assistant":
                         chunks.append((line_num, content))
+                    elif msg_type == "user":
+                        user_chunks.append((line_num, content))
                 else:
                     content = str(content)
 
@@ -203,7 +262,7 @@ def parse_transcript(transcript_path: str) -> tuple[list[dict], list[dict], list
     except Exception:
         pass
 
-    return messages[-MAX_MESSAGES:], saves, chunks
+    return messages[-MAX_MESSAGES:], saves, chunks, file_paths_seen, user_chunks
 
 
 def strip_code(text: str) -> str:
@@ -245,18 +304,30 @@ def _extract_signals(chunks: list[tuple[int, str]], patterns: list[tuple[re.Patt
 
 
 def extract_technical(chunks: list[tuple[int, str]]) -> list[dict]:
-    """Extract technical signals: decisions, discoveries, bug fixes, architecture."""
+    """Extract technical signals: decisions, discoveries, architecture choices."""
     return _extract_signals(chunks, TECHNICAL_PATTERNS)
 
 
-def extract_emotional(chunks: list[tuple[int, str]]) -> list[dict]:
-    """Extract emotional signals: frustration, uncertainty, breakthrough, blockers."""
-    return _extract_signals(chunks, [(EMOTIONAL_SIGNALS, "emotional")])
+def extract_errors(chunks: list[tuple[int, str]]) -> list[dict]:
+    """Extract error and fix signals: error messages, stack traces, fixes applied."""
+    return _extract_signals(chunks, ERROR_PATTERNS)
 
 
 def extract_actions(chunks: list[tuple[int, str]]) -> list[dict]:
     """Extract action signals: TODOs, commitments, next steps, waiting."""
     return _extract_signals(chunks, [(ACTION_SIGNALS, "action")])
+
+
+def extract_next_step(chunks: list[tuple[int, str]]) -> str | None:
+    """Extract the last explicit next-step signal from assistant chunks."""
+    signals = _extract_signals(chunks, [(NEXT_STEP_SIGNALS, "next")])
+    if not signals:
+        return None
+    last = signals[-1]
+    ctx = last["context"]
+    if len(ctx) > TAIL_CHAR_LIMIT:
+        ctx = ctx[:TAIL_CHAR_LIMIT - 3] + "..."
+    return ctx
 
 
 def extract_entities_for_snapshot(chunks: list[tuple[int, str]]) -> dict:
@@ -296,6 +367,31 @@ def extract_entities_for_snapshot(chunks: list[tuple[int, str]]) -> dict:
         "skills": sorted(skills),
         "technologies": sorted(technologies),
     }
+
+
+def extract_primary_intent(user_chunks: list[tuple[int, str]]) -> str | None:
+    """Extract the primary request from the first few user messages."""
+    early = user_chunks[:3]
+    for _, text in early:
+        clean = text.strip().replace("\n", " ")
+        if len(clean) > 10:
+            if len(clean) > TAIL_CHAR_LIMIT:
+                clean = clean[:TAIL_CHAR_LIMIT - 3] + "..."
+            return clean
+    return None
+
+
+def extract_current_work(assistant_chunks: list[tuple[int, str]]) -> list[str]:
+    """Extract what was actively being done from the last 2-3 assistant messages."""
+    recent = assistant_chunks[-3:] if len(assistant_chunks) >= 3 else assistant_chunks
+    lines = []
+    for _, text in recent:
+        clean = text.strip().replace("\n", " ")
+        if len(clean) > 20:
+            if len(clean) > TAIL_CHAR_LIMIT:
+                clean = clean[:TAIL_CHAR_LIMIT - 3] + "..."
+            lines.append(clean)
+    return lines
 
 
 def keywords(text: str) -> set[str]:
@@ -347,71 +443,112 @@ def find_unsaved(candidates: list[dict], saves: list[dict]) -> list[dict]:
     return unsaved
 
 
+def _truncate(text: str, limit: int = TAIL_CHAR_LIMIT) -> str:
+    """Truncate text to limit with ellipsis."""
+    if len(text) > limit:
+        return text[:limit - 3] + "..."
+    return text
+
+
 def build_structured_snapshot(
     technical: list[dict],
-    emotional: list[dict],
+    errors: list[dict],
     entities: dict,
     actions: list[dict],
     messages: list[dict],
+    file_paths: list[str],
+    user_chunks: list[tuple[int, str]],
+    assistant_chunks: list[tuple[int, str]],
     project: str | None,
 ) -> str:
-    """Build structured snapshot with 4 categories + conversation tail."""
+    """Build structured snapshot with 9 CC-aligned sections."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     proj_label = project or "unknown"
     parts = [f"## Session Snapshot — {proj_label} — {now}"]
 
-    # Technical
-    if technical:
-        lines = []
-        for sig in technical[:8]:
-            ctx = sig["context"]
-            if len(ctx) > TAIL_CHAR_LIMIT:
-                ctx = ctx[:TAIL_CHAR_LIMIT - 3] + "..."
-            lines.append(f"- [{sig['type']}] {ctx}")
-        parts.append("### Technical\n" + "\n".join(lines))
+    # Section 1: Primary Request and Intent
+    intent = extract_primary_intent(user_chunks)
+    if intent:
+        parts.append(f"### 1. Primary Request and Intent\n- {intent}")
 
-    # Emotional
-    if emotional:
-        lines = []
-        for sig in emotional[:5]:
-            ctx = sig["context"]
-            if len(ctx) > TAIL_CHAR_LIMIT:
-                ctx = ctx[:TAIL_CHAR_LIMIT - 3] + "..."
-            lines.append(f"- [{sig['type']}] {ctx}")
-        parts.append("### Emotional\n" + "\n".join(lines))
+    # Section 2: Key Technical Concepts (decisions + discoveries — no errors)
+    concept_sigs = [s for s in technical if s["type"] in ("decision", "discovery")]
+    if concept_sigs:
+        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in concept_sigs[:5]]
+        parts.append("### 2. Key Technical Concepts\n" + "\n".join(lines))
 
-    # Entities
-    entity_lines = []
-    if entities.get("projects"):
-        entity_lines.append(f"- Projects: {', '.join(entities['projects'])}")
-    if entities.get("skills"):
-        entity_lines.append(f"- Skills: {', '.join('/' + s for s in entities['skills'])}")
-    if entities.get("technologies"):
-        entity_lines.append(f"- Technologies: {', '.join(entities['technologies'])}")
-    if entity_lines:
-        parts.append("### Entities\n" + "\n".join(entity_lines))
+    # Section 3: Files and Code Sections
+    if file_paths:
+        # Deduplicate while preserving order, show most recent (tail) first
+        seen: set[str] = set()
+        unique_paths: list[str] = []
+        for fp in reversed(file_paths):
+            if fp not in seen:
+                seen.add(fp)
+                unique_paths.append(fp)
+        unique_paths = unique_paths[:8]
+        lines = [f"- {fp}" for fp in unique_paths]
+        parts.append("### 3. Files and Code Sections\n" + "\n".join(lines))
 
-    # Actions
-    if actions:
-        lines = []
-        for sig in actions[:5]:
-            ctx = sig["context"]
-            if len(ctx) > TAIL_CHAR_LIMIT:
-                ctx = ctx[:TAIL_CHAR_LIMIT - 3] + "..."
-            lines.append(f"- [{sig['type']}] {ctx}")
-        parts.append("### Actions\n" + "\n".join(lines))
+    # Section 4: Errors and Fixes
+    if errors:
+        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in errors[:5]]
+        parts.append("### 4. Errors and Fixes\n" + "\n".join(lines))
 
-    # Conversation tail
+    # Section 5: Problem Solving (technical remainder — not decisions/discoveries)
+    ps_sigs = [s for s in technical if s["type"] == "technical"]
+    if ps_sigs:
+        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in ps_sigs[:5]]
+        parts.append("### 5. Problem Solving\n" + "\n".join(lines))
+
+    # Section 6: All User Messages (conversation tail — user side only)
     if messages:
-        tail = messages[-TAIL_MESSAGES:]
-        lines = []
-        for msg in tail:
-            role = msg["role"].upper()
-            content = msg["content"].strip().replace("\n", " ")
-            if len(content) > TAIL_CHAR_LIMIT:
-                content = content[:TAIL_CHAR_LIMIT - 3] + "..."
-            lines.append(f"[{role}] {content}")
-        parts.append(f"### Conversation Tail (last {len(tail)} messages)\n" + "\n".join(lines))
+        user_msgs = [m for m in messages if m["role"] == "user"]
+        tail = user_msgs[-TAIL_MESSAGES:]
+        if tail:
+            lines = []
+            for msg in tail:
+                content = msg["content"].strip().replace("\n", " ")
+                lines.append(f"- {_truncate(content)}")
+            parts.append(f"### 6. All User Messages (last {len(tail)})\n" + "\n".join(lines))
+
+    # Section 7: Pending Tasks
+    if actions:
+        lines = [f"- {_truncate(s['context'])}" for s in actions[:5]]
+        # Add entity context if useful
+        entity_hints = []
+        if entities.get("projects"):
+            entity_hints.append(f"projects: {', '.join(entities['projects'])}")
+        if entities.get("skills"):
+            entity_hints.append(f"skills: {', '.join('/' + s for s in entities['skills'])}")
+        if entity_hints:
+            lines.append(f"  (context: {'; '.join(entity_hints)})")
+        parts.append("### 7. Pending Tasks\n" + "\n".join(lines))
+    elif entities.get("projects") or entities.get("skills"):
+        # No actions but has context — include entities here
+        entity_lines = []
+        if entities.get("projects"):
+            entity_lines.append(f"- Projects: {', '.join(entities['projects'])}")
+        if entities.get("skills"):
+            entity_lines.append(f"- Skills: {', '.join('/' + s for s in entities['skills'])}")
+        if entities.get("technologies"):
+            entity_lines.append(f"- Tech: {', '.join(entities['technologies'])}")
+        parts.append("### 7. Pending Tasks\n" + "\n".join(entity_lines))
+
+    # Section 8: Current Work
+    current = extract_current_work(assistant_chunks)
+    if current:
+        lines = [f"- {c}" for c in current]
+        parts.append("### 8. Current Work\n" + "\n".join(lines))
+
+    # Section 9: Optional Next Step
+    next_step = extract_next_step(assistant_chunks)
+    if not next_step and actions:
+        # Fall back to last action signal
+        last_action = actions[-1]
+        next_step = _truncate(last_action["context"])
+    if next_step:
+        parts.append(f"### 9. Optional Next Step\n- {next_step}")
 
     snapshot = "\n\n".join(parts)
     if len(snapshot) > MAX_SNAPSHOT_CHARS:
@@ -433,7 +570,7 @@ def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool:
         source = "pre-compact-hook"
         meta = json.dumps({
             "source": source,
-            "format": "structured-v1",
+            "format": "structured-v2",
             "counts": counts,
         })
 
@@ -466,15 +603,15 @@ def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool:
 
 
 def format_output(counts: dict, unsaved: list[dict], message_count: int) -> str:
-    """Format output message with category counts and unsaved warnings."""
+    """Format output message with section counts and unsaved warnings."""
     parts = []
-    for key in ("technical", "emotional", "entities", "actions"):
+    for key in ("technical", "errors", "files", "actions"):
         n = counts.get(key, 0)
         if n > 0:
             parts.append(f"{n} {key}")
 
     summary = ", ".join(parts) if parts else "no signals"
-    msg = f"Pre-compact snapshot saved to brain ({message_count} messages captured). Extracted: {summary}."
+    msg = f"Pre-compact snapshot saved to brain ({message_count} messages captured, 9-section format). Extracted: {summary}."
 
     if unsaved:
         items = unsaved[:3]
@@ -535,19 +672,19 @@ if __name__ == "__main__":
         print(FALLBACK_MSG)
         sys.exit(0)
 
-    # Step 1: Single-pass transcript parse
-    messages, brain_saves, assistant_chunks = parse_transcript(transcript_path)
+    # Step 1: Single-pass transcript parse (extended return values)
+    messages, brain_saves, assistant_chunks, file_paths, user_chunks = parse_transcript(transcript_path)
     if not messages:
         print(FALLBACK_MSG)
         sys.exit(0)
 
-    # Step 2: Extract all 4 categories
+    # Step 2: Extract all signal categories
     technical = extract_technical(assistant_chunks)
-    emotional = extract_emotional(assistant_chunks)
+    errors = extract_errors(assistant_chunks)
     entities = extract_entities_for_snapshot(assistant_chunks)
     actions = extract_actions(assistant_chunks)
 
-    # Step 3: Coverage filter (only on technical — emotional/actions always captured)
+    # Step 3: Coverage filter (only on technical — errors/actions always captured)
     unsaved_technical = find_unsaved(technical, brain_saves)
 
     # Step 4: Build structured snapshot
@@ -556,7 +693,8 @@ if __name__ == "__main__":
     entity_count = sum(len(v) for v in entities.values())
     counts = {
         "technical": len(unsaved_technical),
-        "emotional": len(emotional),
+        "errors": len(errors),
+        "files": len(file_paths),
         "entities": entity_count,
         "actions": len(actions),
         "messages": len(messages),
@@ -564,10 +702,13 @@ if __name__ == "__main__":
 
     snapshot = build_structured_snapshot(
         technical=unsaved_technical,
-        emotional=emotional,
+        errors=errors,
         entities=entities,
         actions=actions,
         messages=messages,
+        file_paths=file_paths,
+        user_chunks=user_chunks,
+        assistant_chunks=assistant_chunks,
         project=project,
     )
 
