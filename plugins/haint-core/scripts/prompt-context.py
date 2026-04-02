@@ -481,13 +481,14 @@ def search_general_hybrid(
 # ── Phase 2: Tool search (vector only) ───────────────────────────────────
 
 def search_tools_vector(
-    conn: sqlite3.Connection, embedding: list[float]
+    conn: sqlite3.Connection, embedding: list[float], project: str | None = None
 ) -> list[dict]:
     """Vector similarity search for tool memories (Semantic Toolbox). Returns with IDs."""
     emb_bytes = struct.pack(f"{len(embedding)}f", *embedding)
+    project_filter = "AND (m.project = :project OR m.project IS NULL)" if project else ""
     try:
         rows = conn.execute(
-            """WITH vec_results AS (
+            f"""WITH vec_results AS (
                 SELECT memory_id, distance
                 FROM memory_vectors
                 WHERE embedding MATCH :embedding
@@ -497,9 +498,10 @@ def search_tools_vector(
             FROM vec_results v
             JOIN memories m ON m.id = v.memory_id
             WHERE m.type = 'tool'
+            {project_filter}
             ORDER BY v.distance
             LIMIT :limit""",
-            {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "limit": FETCH_K_TOOLS},
+            {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "limit": FETCH_K_TOOLS, "project": project},
         ).fetchall()
 
         results = []
@@ -515,7 +517,9 @@ def search_tools_vector(
         return []
 
 
-def _fts5_tool_search(conn: sqlite3.Connection, query: str, limit: int = 3) -> list[dict]:
+def _fts5_tool_search(
+    conn: sqlite3.Connection, query: str, limit: int = 3, project: str | None = None
+) -> list[dict]:
     """Fast FTS5 search for tools. Returns [] if no good matches or on error.
 
     Used as a pre-filter before the embedding API call — if FTS5 returns
@@ -531,16 +535,20 @@ def _fts5_tool_search(conn: sqlite3.Connection, query: str, limit: int = 3) -> l
     # Build FTS5 OR query from first 5 words (longer queries risk FTS5 parse errors)
     fts_query = " OR ".join(words[:5])
 
+    project_filter = "AND (m.project = ? OR m.project IS NULL)" if project else ""
+    params = [fts_query] + ([project] if project else []) + [limit]
+
     try:
         rows = conn.execute(
-            """SELECT m.id, m.content, m.metadata, rank
+            f"""SELECT m.id, m.content, m.metadata, rank
                FROM memory_fts
                JOIN memories m ON m.id = memory_fts.memory_id
                WHERE memory_fts MATCH ?
                  AND m.type = 'tool'
+                 {project_filter}
                ORDER BY rank
                LIMIT ?""",
-            (fts_query, limit),
+            params,
         ).fetchall()
 
         results = []
@@ -633,10 +641,10 @@ if __name__ == "__main__":
         tool_budget_used = load_tool_chars()
 
         # Try FTS5 first (free, ~1ms) — avoids embedding API call ~80% of the time
-        tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS)
+        tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS, project=project)
         if len(tools) < MAX_TOOL_RESULTS and embedding is not None:
             # FTS5 returned insufficient results — fall back to vector search
-            tools = search_tools_vector(conn, embedding)
+            tools = search_tools_vector(conn, embedding, project=project)
 
         tools = tools[:MAX_TOOL_RESULTS]
         current_tool_names = [t["name"] for t in tools]
