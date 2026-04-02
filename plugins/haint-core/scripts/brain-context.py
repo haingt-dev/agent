@@ -8,9 +8,25 @@ Target: ~300-500 tokens max.
 import json
 import sqlite3
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
+
+
+def _staleness_suffix(date_str: str | None) -> str:
+    """Return ' (Nd ago)' if the memory is 2+ days old, else empty string."""
+    if not date_str:
+        return ""
+    try:
+        # SQLite stores datetimes as naive UTC strings
+        memory_dt = datetime.fromisoformat(date_str)
+        age_days = (datetime.now() - memory_dt).days
+        if age_days >= 2:
+            return f" ({age_days}d ago)"
+    except Exception:
+        pass
+    return ""
 
 
 def get_project() -> str | None:
@@ -37,7 +53,8 @@ def query_context(project: str | None) -> str:
     # Hot-tier memories (importance >= 0.8, any age — timeless high-value)
     try:
         hot_rows = conn.execute(
-            """SELECT content, type, importance FROM memories
+            """SELECT content, type, importance,
+                      COALESCE(updated_at, created_at) AS date FROM memories
                WHERE COALESCE(importance, 0.5) >= 0.8
                  AND type NOT IN ('tool', 'session')
                  AND (project = ? OR project IS NULL)
@@ -46,7 +63,10 @@ def query_context(project: str | None) -> str:
             (project,),
         ).fetchall()
         if hot_rows:
-            items = [f"- [{r['type']}] {r['content'][:120]}" for r in hot_rows]
+            items = [
+                f"- [{r['type']}] {r['content'][:120]}{_staleness_suffix(r['date'])}"
+                for r in hot_rows
+            ]
             sections.append("High-value (timeless):\n" + "\n".join(items))
     except Exception:
         pass
@@ -54,7 +74,7 @@ def query_context(project: str | None) -> str:
     # Recent decisions (last 7 days, max 3) — ordered by importance then recency
     try:
         rows = conn.execute(
-            """SELECT content FROM memories
+            """SELECT content, COALESCE(updated_at, created_at) AS date FROM memories
                WHERE type IN ('decision', 'discovery')
                  AND (project = ? OR project IS NULL)
                  AND created_at >= datetime('now', '-7 days')
@@ -66,7 +86,7 @@ def query_context(project: str | None) -> str:
             (project,),
         ).fetchall()
         if rows:
-            items = [f"- {r['content'][:120]}" for r in rows]
+            items = [f"- {r['content'][:120]}{_staleness_suffix(r['date'])}" for r in rows]
             sections.append("Recent decisions:\n" + "\n".join(items))
     except Exception:
         pass
@@ -74,14 +94,14 @@ def query_context(project: str | None) -> str:
     # Active preferences (max 3)
     try:
         rows = conn.execute(
-            """SELECT content FROM memories
+            """SELECT content, COALESCE(updated_at, created_at) AS date FROM memories
                WHERE type = 'preference'
                  AND (project = ? OR project IS NULL)
                ORDER BY updated_at DESC LIMIT 3""",
             (project,),
         ).fetchall()
         if rows:
-            items = [f"- {r['content'][:120]}" for r in rows]
+            items = [f"- {r['content'][:120]}{_staleness_suffix(r['date'])}" for r in rows]
             sections.append("Preferences:\n" + "\n".join(items))
     except Exception:
         pass
