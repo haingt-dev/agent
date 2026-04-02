@@ -224,6 +224,11 @@ def load_last_tools() -> list[str]:
     return _load_cache().get("last_tools", [])
 
 
+def load_last_memory_ids() -> list[str]:
+    """Load last injected general memory IDs for skip-if-unchanged."""
+    return _load_cache().get("last_memory_ids", [])
+
+
 def load_tool_chars() -> int:
     """Load total tool injected chars from cache."""
     return _load_cache().get("tool_chars", 0)
@@ -235,8 +240,9 @@ def save_cache(
     new_chars: int = 0,
     tool_names: list[str] | None = None,
     new_tool_chars: int = 0,
+    memory_ids: list[str] | None = None,
 ) -> None:
-    """Save injected IDs + keywords + memory chars + tool state."""
+    """Save injected IDs + keywords + memory chars + tool state + last memory IDs."""
     path = _cache_path()
     try:
         cache = _load_cache()
@@ -249,6 +255,8 @@ def save_cache(
         # Tool state
         last_tools = tool_names if tool_names is not None else cache.get("last_tools", [])
         tool_chars = cache.get("tool_chars", 0) + new_tool_chars
+        # General memory IDs for skip-if-unchanged
+        last_memory_ids = memory_ids if memory_ids is not None else cache.get("last_memory_ids", [])
         # Extract and accumulate keywords (deduped, capped)
         existing_kw = cache.get("keywords", [])
         new_kw = _extract_words(current_prompt)
@@ -266,6 +274,7 @@ def save_cache(
             "total_chars": total_chars,
             "last_tools": last_tools,
             "tool_chars": tool_chars,
+            "last_memory_ids": last_memory_ids,
             "ts": time.time(),
         }))
     except Exception:
@@ -540,6 +549,7 @@ if __name__ == "__main__":
             embedding = embed_prompt(combined, api_key)
 
     conn = connect_db(need_vec=(embedding is not None))
+    memory_ids_to_save = None
     if conn and budget_remaining > 0:
         # Phase 1: General memories — over-fetch, dedup, top-K, token cap
         general = search_general_hybrid(conn, combined, embedding, project)
@@ -547,16 +557,28 @@ if __name__ == "__main__":
         new_general = new_general[:MAX_GENERAL_RESULTS]  # top-K after dedup
         # Apply token cap
         capped_general = []
+        capped_chars = 0
         for r in new_general:
             entry_len = len(r["content"]) + len(r["type"]) + 10  # overhead
-            if new_chars + entry_len > budget_remaining:
+            if capped_chars + entry_len > budget_remaining:
                 break
             capped_general.append(r)
-            new_chars += entry_len
-        if capped_general:
+            capped_chars += entry_len
+
+        # Skip-if-unchanged: avoid re-injecting same memories on consecutive prompts
+        # Only skip after at least one previous injection (total_chars > 0) and
+        # when the cache has a non-empty last_memory_ids (not the first prompt).
+        prev_memory_ids = load_last_memory_ids()
+        current_memory_ids = [r["id"] for r in capped_general]
+        if current_memory_ids and current_memory_ids == prev_memory_ids and budget_used > 0:
+            # Same memories as last prompt — skip injection, preserve existing context
+            pass
+        elif capped_general:
             lines = [f"- [{r['type']}] {r['content']}" for r in capped_general]
             sections.append("Brain context:\n" + "\n".join(lines))
             new_ids.update(r["id"] for r in capped_general)
+            new_chars += capped_chars
+            memory_ids_to_save = current_memory_ids
 
         # Phase 2: Semantic Toolbox — fresh search, skip-if-unchanged, tool cap
         # Tools refresh per-prompt (no dedup), but skip injection when results identical
@@ -578,8 +600,8 @@ if __name__ == "__main__":
 
         conn.close()
 
-    # Save IDs + normalized prompt + chars + tool state to cache
-    save_cache(new_ids, normalized, new_chars, tool_names_to_save, new_tool_chars)
+    # Save IDs + normalized prompt + chars + tool state + memory IDs to cache
+    save_cache(new_ids, normalized, new_chars, tool_names_to_save, new_tool_chars, memory_ids_to_save)
 
     if not sections:
         sys.exit(0)
