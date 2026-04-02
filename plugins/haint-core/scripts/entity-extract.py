@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Stop hook: Auto-extract entities from assistant responses.
 
-High-precision regex extraction → dedup via FTS5 → save/bump in brain.db.
-Zero LLM tokens. Fire-and-forget (output ignored by Stop hook).
+High-precision regex extraction → LLM distillation → dedup via FTS5 → save/bump in brain.db.
+Fire-and-forget (output ignored by Stop hook).
 
 Entity categories:
 - Projects: ecosystem project references
@@ -11,6 +11,7 @@ Entity categories:
 """
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -19,8 +20,90 @@ from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
 BRAIN_SRC = Path.home() / "Projects" / "agent" / "mcp" / "haingt-brain" / "src"
+BRAIN_ENV = Path.home() / "Projects" / "agent" / "mcp" / "haingt-brain" / ".env"
 
 MIN_RESPONSE_LENGTH = 200
+
+# ── API key ────────────────────────────────────────────────────────────────
+
+def get_api_key() -> str | None:
+    """Load OpenAI API key from env or brain's .env file."""
+    key = os.environ.get("OPENAI_API_KEY")
+    if key:
+        return key
+    if BRAIN_ENV.exists():
+        for line in BRAIN_ENV.read_text().strip().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and line.startswith("OPENAI_API_KEY"):
+                _, _, val = line.partition("=")
+                return val.strip().strip('"').strip("'")
+    return None
+
+
+# ── LLM distillation ───────────────────────────────────────────────────────
+
+def _distill_findings(findings: list[dict], api_key: str) -> list[dict]:
+    """Refine regex-extracted findings via LLM distillation."""
+    if not findings or not api_key:
+        return findings  # Graceful fallback
+
+    # Take top 5 findings
+    top = findings[:5]
+    raw_text = "\n".join(f"- [{f['type']}] {f['content']}" for f in top)
+
+    prompt = f"""Extract atomic facts from these session findings. For each, output one line:
+FACT: category | confidence 0-10 | concise self-contained fact
+
+Categories: decision, discovery, pattern, entity, preference
+Rules:
+- Each fact must be self-contained (no pronouns, no "the above")
+- Include specific names, versions, dates
+- Skip generic observations
+- If a finding is already atomic and clear, keep it as-is
+- Output NOTHING if no facts worth remembering
+
+Findings:
+{raw_text}"""
+
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=json.dumps({
+                "model": "gpt-4.1-nano",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 500,
+                "temperature": 0.0,
+            }).encode(),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            result = json.loads(resp.read())
+            text = result["choices"][0]["message"]["content"].strip()
+
+        # Parse FACT: lines
+        distilled = []
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("FACT:"):
+                parts = line[5:].split("|", 2)
+                if len(parts) == 3:
+                    category = parts[0].strip()
+                    confidence = float(parts[1].strip()) / 10.0
+                    content = parts[2].strip()
+                    if content:
+                        distilled.append({
+                            "type": category,
+                            "content": content,
+                            "confidence": confidence,
+                        })
+        return distilled if distilled else findings  # Fallback to originals
+    except Exception:
+        return findings  # Any failure → use regex results as-is
+
 
 # ── Entity patterns ────────────────────────────────────────────────────────
 
@@ -215,6 +298,11 @@ if __name__ == "__main__":
     if not entities:
         sys.exit(0)
 
+    # LLM distillation: refine top 5 regex findings into higher-quality atomic facts
+    api_key = get_api_key()
+    findings = [{"type": e["category"], "content": f"{e['name']} — {e['description']}"} for e in entities]
+    distilled = _distill_findings(findings, api_key)
+
     # Detect project from cwd, fallback to transcript_path
     project = None
     cwd = Path(data.get("cwd", ""))
@@ -247,14 +335,35 @@ if __name__ == "__main__":
         new_count = 0
         bump_count = 0
 
-        for entity in entities:
-            existing = find_existing_entity(conn, entity["name"], entity["category"])
-            if existing:
-                bump_access(conn, existing["id"])
-                bump_count += 1
-            else:
-                save_entity(conn, entity["name"], entity["category"], entity["description"], project)
-                new_count += 1
+        # Use distilled facts as the save candidates (fall back to regex entities if distillation failed)
+        if distilled is not findings:
+            # Distillation succeeded: save distilled facts, bump existing entities from regex set
+            for entity in entities:
+                existing = find_existing_entity(conn, entity["name"], entity["category"])
+                if existing:
+                    bump_access(conn, existing["id"])
+                    bump_count += 1
+            for fact in distilled:
+                name = fact["content"][:80]  # Use content as name for distilled facts
+                category = fact["type"]
+                description = fact["content"]
+                existing = find_existing_entity(conn, name, category)
+                if existing:
+                    bump_access(conn, existing["id"])
+                    bump_count += 1
+                else:
+                    save_entity(conn, name, category, description, project)
+                    new_count += 1
+        else:
+            # Fallback: distillation failed or was skipped, use original regex entities
+            for entity in entities:
+                existing = find_existing_entity(conn, entity["name"], entity["category"])
+                if existing:
+                    bump_access(conn, existing["id"])
+                    bump_count += 1
+                else:
+                    save_entity(conn, entity["name"], entity["category"], entity["description"], project)
+                    new_count += 1
 
         conn.commit()
         conn.close()
