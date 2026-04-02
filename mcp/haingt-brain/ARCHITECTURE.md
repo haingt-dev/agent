@@ -1,6 +1,7 @@
 # haingt-brain — Architecture Document
 
-> Last updated: 2026-03-28
+> Last updated: 2026-04-02
+> Version: v4.1.0
 > Status: Production (single-user, daily use)
 > Origin: Applied concepts from DeepLearning.AI "Building Memory-Aware Agents" course
 
@@ -239,6 +240,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
 - **Trigger**: Every session start, resume, or post-compact
 - **Output**: Git branch + recent commits + memory-bank brief + brain context
 - **brain-context.py**: Direct SQLite read → recent decisions (3, 7 days), preferences (3), last session summary (1)
+- **Memory Staleness Warnings**: Memories older than 2 days get an `(Nd ago)` suffix appended to their content in the injected context (e.g. `(5d ago)`). Gives Claude immediate recency signal without extra tokens.
 - **Target**: ~300-500 tokens injected
 
 ### UserPromptSubmit → `prompt-context.py`
@@ -249,6 +251,8 @@ ORDER BY s.rrf_score DESC LIMIT :k
 - **Phase 1 — General memories**: Hybrid FTS5 + vector RRF, project-scoped, type-weighted
   - Over-fetch 8 → dedup filter (skip already-injected) → top 3
   - Token cap: `MAX_INJECTED_CHARS = 3000` (~750 tokens) across session
+  - **FTS5 Pre-filter**: Before calling the OpenAI embedding API, runs a keyword FTS5 search. If ≥3 results hit → use FTS-only path (skips the embedding call). 80%+ prompts hit this path. Falls back to full hybrid RRF when <3 FTS5 results.
+  - **General Memory Skip-if-Unchanged**: If the top-3 memory IDs are identical to the previous prompt's injected IDs → skip re-injection entirely. Saves ~500-750 tokens per unchanged prompt in stable-topic conversations.
 - **Phase 2 — Semantic Toolbox**: Vector-only search for type='tool'
   - Fresh top-3 every prompt (no dedup — tools are per-prompt relevance)
   - Skip-if-unchanged: same tool names as last prompt → skip injection
@@ -257,7 +261,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
   - Tracks: injected IDs, accumulated keywords, memory chars, tool state
   - TTL: 2 hours. Also reset by PreCompact (compact wipes system-reminders)
 - **Multi-turn context**: Accumulates keywords from recent prompts → richer embedding queries
-- **Performance**: ~150ms (one embedding API call + two DB queries)
+- **Performance**: ~150ms typical (FTS5 pre-filter path skips embedding API); ~250ms on vector fallback path
 
 ### PostToolUse → `post-tool-use.sh` + `search-and-store.py`
 - **Trigger**: After WebSearch, WebFetch, or Context7 query-docs completes
@@ -271,10 +275,26 @@ ORDER BY s.rrf_score DESC LIMIT :k
 ### PreCompact → `pre-compact.sh` + `pre-compact-snapshot.py`
 - **Trigger**: Before context compaction
 - **Input**: `{"transcript_path": "/path/to/transcript.jsonl"}`
-- **Action**: Parse last 20 user+assistant messages → 4-category structured extraction (technical, emotional, entities, actions) → write to brain.db as type=session, format=structured-v1
+- **Action**: Parse last 20 user+assistant messages → 9-section structured extraction → write to brain.db as type=session, format=structured-v2
+- **9-Section Format** (aligned with Claude Code compact prompt structure):
+  1. Primary Request & Intent
+  2. Key Concepts & Technologies
+  3. Files & Code Discussed
+  4. Errors & Fixes Applied
+  5. Problem Solving Approach
+  6. User Messages Summary
+  7. Pending Tasks
+  8. Current Work State
+  9. Immediate Next Step
 - **Cache reset**: Deletes prompt-context dedup cache for this session (compact wipes system-reminders → dedup/caps must reset to allow re-injection)
 - **No embedding**: FTS-only (hook must stay fast)
-- **Why**: Prevents context loss on /compact — brain-context.py re-injects on next SessionStart
+- **Why**: Prevents context loss on /compact — brain-context.py re-injects on next SessionStart. 9-section format mirrors Claude Code's own compact prompt, improving continuity signal quality.
+
+### Stop → `entity-extract.py`
+- **Trigger**: After Claude finishes a response (Stop hook)
+- **Action**: Regex extraction of entities (tools, technologies, projects, people) from the assistant turn
+- **LLM Distillation**: After regex extraction, the top 5 findings are passed to gpt-4.1-nano for refinement into atomic facts with confidence scores. Low-confidence extractions are discarded.
+- **Output**: Writes type=entity memories directly to brain.db (direct SQLite, no MCP)
 
 ### PreToolUse (Bash) → `pre-tool-safety.sh`
 - **Not brain-related** — safety validation only
@@ -316,6 +336,29 @@ Five strategies, all in `consolidate.py`:
 - If >3 days since last run → `consolidate_all()` automatically
 - `brain_session("save")` triggers `cluster_and_synthesize` if 3+ memories created
 - Timestamp recorded in `brain_meta` after each run
+
+### Session-Count Gate
+- Consolidation requires **both** conditions: >3 days since last consolidation AND ≥3 sessions since last consolidation run.
+- Prevents over-consolidation in low-activity periods (e.g., a 4-day gap with only 1 session is not worth the LLM cost).
+- Session count tracked in `brain_meta.sessions_since_consolidation`, reset to 0 after each run.
+
+### Circuit Breaker
+- Tracks consecutive consolidation failures in `brain_meta.consolidation_failures`.
+- After 3 consecutive failures → auto-disable consolidation (sets `brain_meta.consolidation_disabled = 1`).
+- Disabled state is surfaced in `brain_session("status")` output with a warning.
+- Reset paths: successful consolidation run clears the counter; manual `brain_session("consolidate")` always runs regardless of disabled state and resets the circuit breaker on success.
+
+### MEMORY.md Limit Enforcement
+- After every consolidation run, `consolidate.py` checks the line count of each project's `MEMORY.md` (paths discovered via `brain_meta`).
+- **Warning** at >200 lines: prints a notice recommending archival of stale entries.
+- **Severe** at >250 lines: prints a strong warning with a suggestion to run `/reflect` for manual pruning.
+- Does not auto-edit MEMORY.md — enforces the 200-line convention as a human-decision checkpoint.
+
+### Consolidation File Lock
+- PID-based file lock at `~/.local/share/haingt-brain/.consolidation_lock`.
+- Lock file contains the PID of the owning process; stale locks (>1 hour) are automatically cleared.
+- Prevents concurrent consolidation runs (e.g., two simultaneous `brain_session("start")` calls from different Claude Code windows).
+- If lock is held: consolidation is skipped silently for the current session.
 
 ## 8. Memory Types
 
@@ -435,13 +478,12 @@ Context approaching limit → /compact triggered
   → pre-compact.sh receives {"transcript_path": "..."}
     → pre-compact-snapshot.py
       → read transcript JSONL
-      → 4-category structured extraction:
-        technical (decisions, code patterns)
-        emotional (frustration, satisfaction signals)
-        entities (projects, skills, technologies)
-        actions (TODOs, next steps)
+      → 9-section structured extraction:
+        primary request, key concepts, files/code,
+        errors/fixes, problem solving, user messages,
+        pending tasks, current work, next step
       → sqlite3.connect(brain.db)        [direct write]
-      → INSERT memories (type=session, format=structured-v1)
+      → INSERT memories (type=session, format=structured-v2)
       → INSERT memory_fts
       → COMMIT
       → reset prompt-context cache (dedup/caps/tool state)
@@ -536,6 +578,14 @@ Context approaching limit → /compact triggered
 | **Semantic Toolbox (brain_tools)** | At 13 skills, verbose descriptions = ~1,080 always-on tokens. At 200 skills: impossible. brain_tools routes by meaning, descriptions reduced to labels (~50 chars). |
 | **Core memory over @imports** | @personality.md + @goals.md = ~4,537 tokens every session. core-memory.md = ~480 tokens. Deep context loaded on demand via file paths. |
 | **PreCompact transcript snapshot** | /compact destroys context. transcript_path (JSONL) is available to hooks. Extract last 20 messages → save to brain → re-inject on SessionStart. Seamless continuity. |
+| **9-section PreCompact format (structured-v2)** | 4-category format (structured-v1) was generic. Claude Code's own compact prompt uses 9 specific sections. Mirroring that structure produces higher-fidelity snapshots and better re-injection relevance. |
+| **FTS5 pre-filter before embedding** | OpenAI embedding API adds ~100-150ms per prompt. Most prompts have clear keywords — FTS5 alone returns ≥3 good results. Pre-filter skips API on 80%+ of prompts, cuts latency ~40%. |
+| **General memory skip-if-unchanged** | In focused work sessions, consecutive prompts pull the same top-3 memories. Re-injection wastes 500-750 tokens per prompt. ID comparison is O(1) and catches the common case. |
+| **Session-count gate for consolidation** | Time-only gate (3 days) triggered on quiet weeks with 1-2 sessions — not worth LLM cost. Session count adds meaningful signal: need both time AND activity to justify consolidation run. |
+| **Circuit breaker for consolidation** | Repeated API/DB errors during consolidation can silently degrade the system. 3-strike disable surfaces the problem and prevents runaway failure loops. Manual override via brain_session("consolidate") always works. |
+| **PID-based file lock for consolidation** | Multiple Claude Code windows can run simultaneously, each starting a session. Without a lock, concurrent consolidation runs corrupt merge operations (both see same duplicates, both delete one copy). |
+| **Staleness suffix in brain-context.py** | Injected memories had no recency signal — a 30-day-old decision looked identical to a 1-day-old one. `(Nd ago)` suffix gives Claude immediate signal to weight recent context higher, zero extra tokens. |
+| **LLM distillation in entity-extract.py** | Regex extraction catches entities but not intent or confidence. gpt-4.1-nano post-processing refines top 5 into atomic facts with scores. Eliminates false-positive entities (e.g., common words matched by regex). |
 | **Search-and-Store auto-capture** | Every un-saved WebSearch result = knowledge lost. PostToolUse hook auto-persists to brain. Future brain_recall finds past searches without re-searching. |
 | **Per-prompt context injection** | SessionStart injects brain context once. UserPromptSubmit injects per message. More targeted — Claude sees relevant memories for each specific question. |
 
