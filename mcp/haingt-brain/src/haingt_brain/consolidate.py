@@ -1,15 +1,61 @@
 """Auto-consolidation: merge duplicates, decay unused patterns, consolidate old sessions."""
 
+import glob
 import json
 import sqlite3
 import struct
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from .db import serialize_embedding
 
 
+def _get_meta_int(conn: sqlite3.Connection, key: str, default: int = 0) -> int:
+    """Read an integer value from brain_meta, returning default if not found."""
+    row = conn.execute("SELECT value FROM brain_meta WHERE key = ?", (key,)).fetchone()
+    return int(row[0]) if row else default
+
+
+def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
+    """Upsert a value into brain_meta."""
+    conn.execute(
+        "INSERT OR REPLACE INTO brain_meta (key, value) VALUES (?, ?)", (key, value)
+    )
+
+
 def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
-    """Run all consolidation strategies. Returns a report of actions taken."""
+    """Run all consolidation strategies. Returns a report of actions taken.
+
+    Includes a circuit breaker: if consolidation has failed 3+ consecutive times,
+    it skips execution and returns a circuit_breaker_open status. The failure count
+    resets on success.
+    """
+    # Circuit breaker check
+    failures = _get_meta_int(conn, "consolidation_failures", 0)
+    if failures >= 3:
+        return {
+            "status": "circuit_breaker_open",
+            "message": (
+                f"Consolidation disabled after {failures} consecutive failures. "
+                "Reset with brain_session('consolidate')."
+            ),
+        }
+
+    try:
+        result = _do_consolidate_all(conn, dry_run)
+        if not dry_run:
+            _set_meta(conn, "consolidation_failures", "0")
+            conn.commit()
+        return result
+    except Exception:
+        if not dry_run:
+            _set_meta(conn, "consolidation_failures", str(failures + 1))
+            conn.commit()
+        raise
+
+
+def _do_consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
+    """Internal implementation of all consolidation strategies."""
     report = {
         "duplicates_merged": 0,
         "patterns_decayed": 0,
@@ -44,6 +90,35 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
     # Record consolidation timestamp
     _record_consolidation(conn)
 
+    # Check MEMORY.md size limits
+    report = check_memory_limits(report)
+
+    return report
+
+
+def check_memory_limits(report: dict) -> dict:
+    """Check all MEMORY.md files for size limits. Adds warnings to report."""
+    memory_files = glob.glob(
+        str(Path.home() / ".claude/projects/*/memory/MEMORY.md")
+    )
+    warnings = []
+    for path in memory_files:
+        try:
+            with open(path) as f:
+                lines = f.readlines()
+            line_count = len(lines)
+            if line_count > 250:
+                warnings.append(
+                    f"SEVERE: {path} has {line_count} lines (limit: 200). Manual pruning needed."
+                )
+            elif line_count > 200:
+                warnings.append(
+                    f"WARNING: {path} has {line_count} lines (limit: 200). Consider pruning."
+                )
+        except (FileNotFoundError, PermissionError):
+            pass
+    if warnings:
+        report["memory_limit_warnings"] = warnings
     return report
 
 
