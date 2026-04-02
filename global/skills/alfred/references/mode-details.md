@@ -36,6 +36,7 @@ Use `AskUserQuestion`: "Tasks nào đã hoàn thành hôm nay?" — expect numbe
   - Non-recurring tasks: ask user for target date, then `reschedule-tasks` with that date
 - Daily habits → not in Todoist (calendar recurring events, skip)
 - **Stale `[alfred]` calendar events from today** → `gcal_delete_event` to clean up materialized blocks that are no longer relevant
+- **Recurring calendar events (has `recurringEventId`)** → NEVER delete. Past = already resolved. Only `[alfred]`-marked non-recurring blocks are safe to delete.
 - **Todoist tasks materialized earlier today** → `reschedule-tasks` handles this — moves to next occurrence without overwriting the recurrence rule
 
 **Important:** `reschedule-tasks` is the documented Todoist API for moving due dates. It preserves recurrence. After the call, verify the task's `due.date` advanced to the next occurrence.
@@ -192,3 +193,53 @@ Get current timestamp via: `obsidian eval 'code=new Date().toLocaleString("sv-SE
 > Read `references/output-formats.md` for the summary template.
 
 Show: completed count, carried over count, note path updated.
+
+---
+
+## Mode 3 Sub-Mode: Audit Flow
+
+Triggered by "audit", "health check", "kiểm tra". Full Todoist structure verification against expected project hierarchy.
+
+### Step A1: Fetch Structure (parallel)
+
+- `find-sections` for Main Quests (`6g6f74cmqrRj2937`) — verify 4 sections (💰 Income, 🧠 Growth, 👨‍👩‍👧 Family, 🏆 Milestones)
+- `find-sections` for Side Quests (`6g6f74h9JQXGVX6p`) — verify 2 sections (🎯 Passion, 🏠 Life)
+- `find-tasks` per section — count and list all active tasks
+- `find-tasks` with filter `created before: -30 days & no date & !recurring` — stale tasks
+- `find-tasks` with filter `!@high_energy & !@medium_energy & !@low_energy` — unlabeled tasks
+
+### Step A2: Health Checks
+
+| Check | How | Flag if |
+|-------|-----|---------|
+| Sections exist | Compare A1 sections vs SKILL.md reference IDs | Missing section → ⚠️ MISSING |
+| Milestones populated | Count tasks in 🏆 Milestones | 0 tasks → ⚠️ EMPTY |
+| Deadline coverage | Milestones without `deadlineDate` | Missing → ⚠️ NO DEADLINE |
+| Stale tasks | >30 days, no date, not recurring | Present → 🧹 STALE |
+| Priority drift | Main Quest tasks with p3/p4, Side Quest with p1 | Wrong tier → ⚠️ PRIORITY |
+| Label hygiene | Tasks missing energy label | Missing → ⚠️ NO LABEL |
+| Duration set | Tasks without `duration` field | Missing → 💡 NO DURATION |
+
+### Step A3: Report
+
+```
+🏥 Todoist Health Audit — {date}
+
+✅ Healthy: {passing checks}
+⚠️ Issues:
+  → {check}: {details + affected tasks}
+
+🔧 Suggested fixes:
+  → {actionable fix per issue}
+```
+
+### Step A4: Execute
+
+`AskUserQuestion`: "Fix nào muốn Alfred thực hiện?" — options: Fix all / Pick specific / Cancel.
+
+For each approved fix:
+- Missing deadlines → `update-tasks` with `deadlineDate`
+- Priority drift → `update-tasks` with correct priority
+- Missing labels → `update-tasks` with suggested energy label
+- Missing duration → `update-tasks` with estimated duration (90m/45m/30m by energy)
+- Stale tasks → offer: schedule (set due), complete, or delete

@@ -13,11 +13,12 @@ Print this directly to the conversation — do not write to a file.
 Date: {today}
 
 ## Summary
-- Always-on baseline: {total}K tokens (target: ≤30K)
+- Model context: {200K | 1M} (detect from model ID suffix: [1m] = 1M, else 200K)
+- Always-on baseline: {total}K tokens ({pct}% of context window)
 - Status: {HEALTHY | NEEDS ATTENTION | CRITICAL}
-  - HEALTHY: ≤25K tokens, 0 critical issues
-  - NEEDS ATTENTION: 25-35K tokens or 1+ warnings
-  - CRITICAL: >35K tokens or 1+ critical issues
+  - HEALTHY: ≤ 2.5% of window, 0 critical issues
+  - NEEDS ATTENTION: 2.5-5% of window or 1+ warnings
+  - CRITICAL: > 5% of window or 1+ critical issues
 - Issues: {n_critical} critical, {n_warn} warnings, {n_info} info
 
 ## Context Breakdown
@@ -29,6 +30,19 @@ Date: {today}
 | ... | | | | | |
 | **Total always-on** | | | **{n}** | | |
 | Hook dynamic (est.) | — | — | ~{n} | dynamic | ℹ️ |
+
+## Controllability
+
+Group always-on costs by who controls them and what action is possible:
+
+| Category | Tokens | % of baseline | Actionable? |
+|----------|--------|--------------|-------------|
+| User-authored (CLAUDE.md expanded, MEMORY.md, brain files, skill metadata) | {N} | {pct}% | Yes — edit directly |
+| MCP structural (deferred tool names + server instructions) | {N} | {pct}% | Partial — add/remove servers |
+| Dynamic (hook-injected, SessionStart) | {N} | {pct}% | Yes — modify hook scripts |
+| **Total** | **{N}** | | |
+
+Key insight: if MCP structural > 50% of baseline, cutting user-authored content has diminishing returns. Focus on MCP server scoping (move non-essential servers from global to per-project .mcp.json) or runtime discipline (/compact, subagents) instead.
 
 ## Issues Found
 
@@ -48,12 +62,29 @@ Date: {today}
 ## Comparison
 {If token-audit.json exists from a previous run, show the delta table here}
 
+## Brain Impact
+{Only include if previous snapshot exists. Shows whether brain system is effectively reducing context cost.}
+
+| Metric | Value |
+|--------|-------|
+| Import compression | {old_expanded - new_expanded} tok saved (what @imports changed between snapshots) |
+| MEMORY.md headroom | {N} lines used / 200 cap — {200 - N} lines free (brain absorbs overflow via brain_save) |
+| Brain verdict | {EFFECTIVE / NEUTRAL / UNDERUTILIZED — see criteria below} |
+
+Brain verdict criteria:
+- **EFFECTIVE**: imports compressed between snapshots (e.g., full profile → core-memory) AND MEMORY.md well under cap (<50% used)
+- **NEUTRAL**: no import changes, MEMORY.md stable
+- **UNDERUTILIZED**: MEMORY.md near cap (>75%) despite brain available — content should migrate to brain_save
+
+If no previous snapshot exists: "First audit — run again after next optimization cycle to track brain impact."
+
 ## Limitations
 This audit measures BASELINE costs (static context loaded per session). It does NOT measure:
 - Runtime token accumulation from tool call results (MCP responses, file reads)
 - Conversation history growth across turns
 - Skill body loading when skills are invoked mid-session
 - Hook-injected dynamic context (SessionStart brain context injection is estimated at ~300-500 tokens but varies by brain.db content)
+- MCP server instruction text is estimated (may be truncated in context) — actual size may vary ±500 tok
 
 For long sessions, runtime costs typically dwarf baseline. Mitigations: `/compact` regularly, `/clear` between unrelated tasks, delegate heavy exploration to subagents.
 ```
@@ -93,6 +124,8 @@ Determine the project memory directory — it's under `~/.claude/projects/` with
 {
   "date": "{YYYY-MM-DD}",
   "project": "{project_name}",
+  "context_window": 200000,
+  "baseline_pct": 5.9,
   "total_always_on_tokens": {N},
   "breakdown": {
     "global_claude_md_raw": {N},
@@ -110,7 +143,13 @@ Determine the project memory directory — it's under `~/.claude/projects/` with
     "skill_descriptions": {N},
     "mcp_deferred": {N},
     "mcp_deferred_tool_count": {N},
+    "mcp_instructions": {N},
     "hook_dynamic_estimate": {N}
+  },
+  "controllability": {
+    "user_authored": {N},
+    "mcp_structural": {N},
+    "dynamic": {N}
   },
   "issues": {
     "critical": {N},

@@ -60,6 +60,18 @@ Moved to Google Calendar as recurring events (no longer in Todoist):
 - Visible in calendar view
 - Alfred Mode 2 reads this for slot allocation. Missing → estimate from energy label
 
+### Reminders
+
+Three types: `relative` (minuteOffset before due), `absolute` (specific datetime), `location` (geofence).
+
+| Scenario | Type | Config |
+|----------|------|--------|
+| Standard timed task | relative | minuteOffset: 10, push |
+| Deadline < 48h | relative | Add second at minuteOffset: 60 |
+| Prove-phase PEAK | relative | minuteOffset: 0 (instant) |
+
+Tools: `add-reminders` (max 25/call), `find-reminders` (by taskId), `update-reminders`, `delete-object` (type: "reminder").
+
 ### Smart Filters
 
 Pre-built filters alfred can use via `find-tasks` with `filterIdOrName`:
@@ -71,3 +83,14 @@ Pre-built filters alfred can use via `find-tasks` with `filterIdOrName`:
 | 🌊 Low Energy | low_energy + today/overdue | Post-dinner slots |
 | 🏆 Milestones | Milestones section tasks | Deadline awareness |
 | 📅 Has Deadline | Tasks with deadlineDate | Urgency check |
+
+### Filter Syntax Quick Reference
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| `#Project` | Project only | `#⚔️ Main Quests` |
+| `##Project` | Project + sub-projects | `##⚔️ Main Quests` |
+| `/Section` | Section within any project | `/🏆 Milestones` |
+| `@label` | Label | `@high_energy` |
+
+**Common mistake:** `##🏆 Milestones` = project named "🏆 Milestones" (wrong). `/🏆 Milestones` = section (correct).

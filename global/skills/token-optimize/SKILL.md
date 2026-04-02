@@ -10,7 +10,9 @@ Audit Claude Code token consumption and produce an evidence-based optimization r
 
 ## Why This Matters
 
-Claude Code's context window (200K tokens) fills fast. The built-in system prompt (instructions, tool schemas, environment info) consumes a fixed overhead before you type anything — this is uncontrollable. On top of that, user-controlled context layers stack: CLAUDE.md, memory files, skill descriptions, and MCP tool definitions. Performance degrades noticeably in the last 20% of the window — so the goal isn't just cost savings, it's quality preservation.
+Claude Code's context window fills fast. The built-in system prompt (instructions, tool schemas, environment info) consumes a fixed overhead before you type anything — this is uncontrollable. On top of that, user-controlled context layers stack: CLAUDE.md, memory files, skill descriptions, and MCP tool definitions. Performance degrades noticeably in the last 20% of the window — so the goal isn't just cost savings, it's quality preservation.
+
+Context window size varies by model (200K default, 1M for extended-context models). Detect from model ID suffix: `[1m]` = 1M tokens, otherwise assume 200K. All thresholds scale proportionally.
 
 Two types of token cost matter:
 - **Baseline** (static): Always-on files + MCP tool definitions. Fixed per session. This is what this audit measures.
@@ -33,10 +35,12 @@ The good news: most baseline waste is controllable. Community data shows 40-80% 
 | .claudeignore | Required if project has build dirs |
 | Additional directories | 0–2 entries |
 
-Status thresholds for the Summary line:
-- **HEALTHY**: ≤ 25K tokens always-on, 0 critical issues
-- **NEEDS ATTENTION**: 25–35K tokens or 1+ warnings
-- **CRITICAL**: > 35K tokens or 1+ critical issues
+Status thresholds (scale by context window — detect from model ID suffix `[1m]` = 1M, default 200K):
+- Express baseline as % of window: `baseline / window`
+- **HEALTHY**: ≤ 2.5% of window AND 0 critical issues
+- **NEEDS ATTENTION**: 2.5–5% of window OR 1+ warnings
+- **CRITICAL**: > 5% of window OR 1+ critical issues
+- Reference: 200K → 5K / 10K / 10K+. 1M → 25K / 50K / 50K+.
 
 ## Execution
 

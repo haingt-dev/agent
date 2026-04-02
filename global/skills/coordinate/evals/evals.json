@@ -1,0 +1,122 @@
+{
+  "skill_name": "coordinate",
+  "evals": [
+    {
+      "id": 1,
+      "name": "three-feature-parallel",
+      "prompt": "coordinate implement user authentication (JWT), email notifications, and rate limiting for an Express API project",
+      "expected_output": "Decomposition into 3 independent tasks, approval gate shown before spawning, 3 agents spawned in parallel with worktree isolation, results collected with Files Changed blocks, tests run (npm test or equivalent), brain_save called, final report with per-task status.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "shows_decomposition_plan",
+          "type": "content",
+          "text": "Shows task breakdown table before spawning agents (Coordination Plan section with task list)"
+        },
+        {
+          "name": "asks_approval_before_spawn",
+          "type": "tool_usage",
+          "text": "Uses AskUserQuestion for approval gate before spawning any Agent"
+        },
+        {
+          "name": "spawns_multiple_agents",
+          "type": "tool_usage",
+          "text": "Calls Agent tool at least twice (parallel workers)"
+        },
+        {
+          "name": "workers_have_worktree_isolation",
+          "type": "content",
+          "text": "Agent calls include isolation: worktree parameter or mention worktree isolation in worker prompts"
+        },
+        {
+          "name": "runs_verification_phase",
+          "type": "content",
+          "text": "Phase 4 verification runs: npm test, bun test, or equivalent test command appears in output"
+        },
+        {
+          "name": "coordinator_no_file_edits",
+          "type": "content",
+          "text": "Coordinator does NOT call Write tool or use Bash to create/modify files (only workers implement)"
+        },
+        {
+          "name": "brain_save_called",
+          "type": "tool_usage",
+          "text": "brain_save is called after completion with type=pattern and coordinate tag"
+        },
+        {
+          "name": "final_report_present",
+          "type": "content",
+          "text": "Final report shows Coordination Complete section with per-task status (SUCCESS/PARTIAL/FAILED)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "partial-failure-handling",
+      "prompt": "coordinate refactor the database module, update all tests to use the new interface, and migrate the config system to environment variables — note that the config migration may fail",
+      "expected_output": "3 tasks decomposed, agents spawned, one worker reports FAILED status, coordinator does NOT block on the failure, verification runs for successful tasks, final report clearly shows N/M tasks succeeded, skill completes with brain_save.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "shows_plan_before_spawn",
+          "type": "content",
+          "text": "Decomposition plan presented before any Agent call"
+        },
+        {
+          "name": "verification_runs_despite_failure",
+          "type": "content",
+          "text": "Verification phase (Phase 4) runs even when one or more workers fail"
+        },
+        {
+          "name": "partial_failure_reported_clearly",
+          "type": "content",
+          "text": "Final report distinguishes succeeded vs failed tasks (e.g. '2/3 tasks succeeded' or lists Failed Tasks section)"
+        },
+        {
+          "name": "skill_completes_with_failure",
+          "type": "content",
+          "text": "Skill reaches completion and outputs final report even with a failed worker — does not abort mid-way"
+        },
+        {
+          "name": "brain_save_includes_failure_note",
+          "type": "tool_usage",
+          "text": "brain_save called after partial failure, includes success_count in metadata"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "verification-nudge-fires",
+      "prompt": "coordinate add 4 REST endpoints (users CRUD) to this Rust/Axum API project",
+      "expected_output": "4 tasks decomposed (possibly 2 waves), brain_recall called in Phase 1, Cargo.toml detected so test command = cargo test, after 3+ workers complete without tests running the verification nudge fires ('Tests not run. Verification required before proceeding.'), then cargo test runs.",
+      "files": [],
+      "assertions": [
+        {
+          "name": "brain_recall_called_first",
+          "type": "tool_usage",
+          "text": "brain_recall is called in Phase 1 before decomposition"
+        },
+        {
+          "name": "detects_cargo_project",
+          "type": "content",
+          "text": "Detects Cargo.toml and sets TEST_COMMAND to cargo test"
+        },
+        {
+          "name": "decomposes_to_multiple_tasks",
+          "type": "content",
+          "text": "Goal broken into 3 or more tasks (4 endpoints could be 4 tasks or 2 waves of 2)"
+        },
+        {
+          "name": "verification_nudge_fires",
+          "type": "content",
+          "text": "After 3+ workers complete, nudge message appears: 'Tests not run. Verification required before proceeding.'"
+        },
+        {
+          "name": "cargo_test_runs",
+          "type": "content",
+          "text": "Phase 4 runs cargo test and reports the result"
+        }
+      ]
+    }
+  ]
+}

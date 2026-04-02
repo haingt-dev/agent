@@ -108,7 +108,7 @@ Hải's brain measures progress by **pipeline proven**, not output quantity. A t
 
 Determine current phase from today's date → apply capacity:
 - Phase 0 (Mar 2026): 100% → 2-3 deep blocks, full quest load
-- Phase 1 (Apr-Jun): 40% → 1 deep block, during baby naps, minimal quests
+- Phase 1 (Apr-Jun): **Pre-birth: 80%** → 2 deep blocks, near-full load. **Post-birth: 40%** → 1 deep block, baby naps only. Transition = actual birth date. Until told "Sa đã chào đời", assume pre-birth.
 - Phase 2 (Jul-Sep): 60-70% → 2 deep blocks, moderate load
 - Phase 3 (Oct+): 100% → full capacity
 
@@ -125,6 +125,19 @@ Rules:
 - **If bed before 21:00 required** (e.g., wake 4:00): flag "extremely difficult for your chronotype."
 - **Weekend recovery:** Allow natural wake (no alarm) on free weekends. Don't shift >2h from weekday.
 
+### Night Owl Productive Window (21:00-23:00)
+
+The second wind after 21:00 is NOT purely a sleep-management risk — it's also a **usable high-performance window** for specific work types:
+
+- **Proposal writing / diagnostic thinking**: Upwork proposals require reading job descriptions, pattern-matching to achievements, crafting targeted responses. Analytical-creative work that benefits from the alert, focused state of the second wind. GOOD fit for 21:00-23:00.
+- **Execute-phase tasks**: Known pipelines, batch work, repetitive-but-engaging tasks. GOOD fit.
+- **Prove-phase tasks**: DANGEROUS. Prove + past 21:00 = brain gets hooked → 3AM. Red flag still applies (4h).
+
+**Scheduling rule for this window:**
+- Normal wake tomorrow (06:00): 21:00-22:30 is productive, then wind-down 22:00-22:30.
+- Early wake tomorrow (<06:00): DO NOT use this window. Bed anchored to 21:00.
+- Mon-Thu only. Fri-Sun: natural unwinding after vợ time, no scheduled work.
+
 ## 4l. Contextual Modifiers
 
 - **Early wake (<5:00):** Compress everything. Warn sleep debt. Bed = 21:00. Max 1-2 deep blocks. Conservative.
@@ -133,3 +146,4 @@ Rules:
 - **Weekend — về ngoại (Hóc Môn):** ~2 Sundays/month. Afternoon + evening = family. Morning = only productive window.
 - **Weekend — ở nhà:** Skeleton relaxes. Wake +1h. Longer deep work if rested.
 - **Duyên's schedule:** Variable — she works weekends, holidays, any day. NEVER assume weekday-only. Always check calendar for đưa/đón vợ events on the target date. If present → they are immovable anchors.
+- **Late wake (>09:00, second wind aftermath):** W = NOW. PEAK 1 gone. NOW to NOW+1.5h = WAKE ZONE. NOW+1.5h to NOW+3h = sole PEAK. Max 1 deep block. Anchor tonight's bed to 22:00. Do NOT try to "catch up" — compressed day = lower ambition.
