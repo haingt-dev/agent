@@ -499,8 +499,22 @@ Memories:
         return None
 
 
-def should_consolidate(conn: sqlite3.Connection, interval_days: int = 7) -> bool:
-    """Check if consolidation should run based on last run time."""
+def should_consolidate(conn: sqlite3.Connection, interval_days: int = 7, min_sessions: int = 3) -> bool:
+    """Check if consolidation should run based on last run time AND session count.
+
+    Both conditions must be true:
+    - Time condition: at least `interval_days` have passed since last consolidation
+    - Session condition: at least `min_sessions` sessions have started since last consolidation
+    """
+    # Session-count gate: require minimum sessions since last consolidation
+    sessions_row = conn.execute(
+        "SELECT value FROM brain_meta WHERE key = 'sessions_since_consolidation'"
+    ).fetchone()
+    sessions = int(sessions_row["value"]) if sessions_row else 0
+    if sessions < min_sessions:
+        return False
+
+    # Time gate: check elapsed time since last consolidation
     row = conn.execute(
         """SELECT value FROM brain_meta WHERE key = 'last_consolidation'"""
     ).fetchone()
@@ -515,9 +529,12 @@ def should_consolidate(conn: sqlite3.Connection, interval_days: int = 7) -> bool
 
 
 def _record_consolidation(conn: sqlite3.Connection) -> None:
-    """Record the current time as last consolidation."""
+    """Record the current time as last consolidation and reset session counter."""
     conn.execute(
         """INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('last_consolidation', datetime('now'))"""
+    )
+    conn.execute(
+        """INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('sessions_since_consolidation', '0')"""
     )
     conn.commit()
 

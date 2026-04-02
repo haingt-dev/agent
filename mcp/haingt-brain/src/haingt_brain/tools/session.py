@@ -19,6 +19,12 @@ def brain_session_start(conn: sqlite3.Connection, project: str | None = None) ->
         "INSERT INTO sessions (id, project) VALUES (?, ?)",
         (session_id, project),
     )
+
+    # Increment session counter for consolidation gating
+    conn.execute(
+        "INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('sessions_since_consolidation', "
+        "CAST(COALESCE((SELECT CAST(value AS INTEGER) FROM brain_meta WHERE key = 'sessions_since_consolidation'), 0) + 1 AS TEXT))"
+    )
     conn.commit()
 
     # Auto-consolidation check (non-blocking — runs only if overdue)
