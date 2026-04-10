@@ -72,17 +72,20 @@ Three types: `relative` (minuteOffset before due), `absolute` (specific datetime
 
 Tools: `add-reminders` (max 25/call), `find-reminders` (by taskId), `update-reminders`, `delete-object` (type: "reminder").
 
-### Smart Filters
+### Smart Filters (updated 04/2026 — minimal set)
 
 Pre-built filters alfred can use via `find-tasks` with `filterIdOrName`:
 
-| Filter | Intent | Mode 2 use |
-|--------|--------|------------|
-| 🧠 Deep Work Today | high_energy + today/overdue | PEAK window scheduling |
-| ⚡ Medium Energy Today | medium_energy + today/overdue | TRANSITION scheduling |
-| 🌊 Low Energy | low_energy + today/overdue | Post-dinner slots |
-| 🏆 Milestones | Milestones section tasks | Deadline awareness |
-| 📅 Has Deadline | Tasks with deadlineDate | Urgency check |
+| Filter | Intent | Use |
+|--------|--------|-----|
+| 🎯 Big Tasks | `@prove` — all prove goals | Daily focus selection |
+| 🏆 Milestones | Milestones section tasks | Roadmap checkpoint awareness |
+| ⏰ Overdue | Overdue tasks | Safety net |
+
+Energy-based filters removed (Deep Work Today, Medium Energy Today, Low Energy). Alfred can still query by label directly: `find-tasks` with `labels: ["high_energy"]`.
+
+**Deleted labels:** chain_english, life, course
+**Active labels:** high_energy, low_energy, medium_energy, creative, english, prove
 
 ### Filter Syntax Quick Reference
 

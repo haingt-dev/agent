@@ -8,6 +8,9 @@ from mcp.server.fastmcp import FastMCP
 from . import db
 from .tools.forget import brain_forget as _forget
 from .tools.graph import brain_graph as _graph
+from .tools.index import brain_index as _index
+from .tools.outline import brain_outline as _outline
+from .tools.radar import brain_radar as _radar
 from .tools.recall import brain_recall as _recall
 from .tools.save import brain_save as _save
 from .tools.update import brain_update as _update
@@ -220,6 +223,70 @@ def brain_graph(entity: str, depth: int = 2) -> str:
         depth: How many relationship hops to traverse (default 2).
     """
     result = _graph(get_conn(), entity, depth)
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+# ── brain_radar ─────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def brain_radar(project: str | None = None, scope: str | None = None) -> str:
+    """Scan projects for status, hot files, brain topics, and file reference graph.
+
+    Use BEFORE blind glob/grep/read to orient.
+
+    Args:
+        project: Focus on a single project (e.g., "Wildtide"). Scans only that directory.
+        scope: Override — "all" (every project) or "ecosystem" (4 core projects).
+               If neither project nor scope given, scans all projects.
+    """
+    result = _radar(get_conn(), project=project, scope=scope)
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+# ── brain_outline ────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def brain_outline(filepath: str) -> str:
+    """Extract file structure — headings, functions, classes, keys with line numbers.
+
+    Use before reading large files (>100 lines). Returns structure with line numbers
+    so you can Read with precise offset+limit instead of reading the entire file.
+
+    Supports: .md (headings), .py (def/class), .gd (GDScript), .yml/.yaml (top keys),
+    .json (structure), .sh/.bash (functions). Unknown types return first 8 lines.
+
+    Args:
+        filepath: Absolute path (or ~-expanded) to the file to outline.
+
+    Returns JSON with:
+      - file: absolute path
+      - total_lines: int
+      - type: file extension without dot
+      - outline: list of {line, text} or type-specific entries
+    """
+    result = _outline(filepath)
+    return json.dumps(result, indent=2, ensure_ascii=False)
+
+
+# ── brain_index ─────────────────────────────────────────────────────────────
+
+@mcp.tool()
+def brain_index(days: int = 60) -> str:
+    """Get a topic breakdown of what's in brain memory.
+
+    Use before brain_recall to understand available topics and recent activity.
+    Gives you a snapshot of tags, memory types, stale entries, and recent activity.
+
+    Args:
+        days: Number of days to include in topic breakdown (default 60).
+
+    Returns JSON with:
+      - total_memories: total count across all time
+      - topics: {tag_name: {"total": N, "by_type": {...}}, ...} sorted by total desc
+      - stale: [{"tag": str, "count": int}, ...] entries 30+ days old with 0 access
+      - recent_tags: [str, ...] distinct tags from last 7 days, up to 8
+    """
+    result = _index(get_conn(), days)
     return json.dumps(result, indent=2, ensure_ascii=False)
 
 

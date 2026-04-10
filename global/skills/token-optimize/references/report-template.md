@@ -83,7 +83,7 @@ This audit measures BASELINE costs (static context loaded per session). It does 
 - Runtime token accumulation from tool call results (MCP responses, file reads)
 - Conversation history growth across turns
 - Skill body loading when skills are invoked mid-session
-- Hook-injected dynamic context (SessionStart brain context injection is estimated at ~300-500 tokens but varies by brain.db content)
+- Hook-injected dynamic context — two layers: (1) SessionStart (brain-context.py L0+L1 pattern: ~50 tok/session), (2) UserPromptSubmit (prompt-context.py: ~0-500 tok/working prompt with trivial gate + toolbox-off config)
 - MCP server instruction text is estimated (may be truncated in context) — actual size may vary ±500 tok
 
 For long sessions, runtime costs typically dwarf baseline. Mitigations: `/compact` regularly, `/clear` between unrelated tasks, delegate heavy exploration to subagents.
@@ -144,7 +144,8 @@ Determine the project memory directory — it's under `~/.claude/projects/` with
     "mcp_deferred": {N},
     "mcp_deferred_tool_count": {N},
     "mcp_instructions": {N},
-    "hook_dynamic_estimate": {N}
+    "hook_dynamic_estimate": {N},
+    "per_prompt_injection_est": {N}
   },
   "controllability": {
     "user_authored": {N},

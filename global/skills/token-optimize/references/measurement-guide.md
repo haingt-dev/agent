@@ -18,7 +18,7 @@ For each file, record: path, line count, char count, estimated tokens (chars / 3
 6. Brain files — Glob `~/.claude/brains/*.md`. For each: path, lines, chars, tokens. Note which project CLAUDE.md files @import each brain file (grep for `@~/.claude/brains/` across all CLAUDE.md files). These are always-on for every project that @imports them.
 7. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills. Note: with brain_tools Semantic Toolbox, descriptions can be minimal labels (~20-50 chars) — verbose descriptions are waste.
 8. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. Each enabled plugin contributes skill descriptions to always-on context. Scan plugin skill paths: `~/Projects/agent/plugins/*/skills/*/SKILL.md`.
-9. Hook dynamic context (estimated) — Read SessionStart hook scripts (check hooks.json or settings.json for SessionStart entries). If hooks inject context (e.g., brain-context.py reading from brain.db), estimate output size. Category: "dynamic (estimated)" — not statically measurable but impacts per-session token budget. Typical: ~300-500 tokens for brain context injection.
+9. Hook dynamic context (estimated) — Two layers: (a) SessionStart (brain-context.py): read script to check pattern. L0+L1 hard-cap = ~50 tok. Pre-L0/L1 pattern (injects recent decisions + preferences) = ~300-500 tok. (b) UserPromptSubmit (prompt-context.py): check for trivial-prompt gate and toolbox removal — see 3i.2 in Phase 3. Category: "dynamic (estimated)" — not statically measurable but impacts token budget per session/prompt.
 
 ### Resolving `@import` directives
 
@@ -210,7 +210,16 @@ Brain files (`~/.claude/brains/*.md`) are shared context imported by project CLA
 
 ### 3i. Hook dynamic overhead
 
-SessionStart hooks can inject context per-session (e.g., brain-context.py queries brain.db for recent decisions, preferences, last session summary). This context is dynamic and not statically measurable, but impacts per-session token budget.
-- Read SessionStart hook scripts to estimate injected token count. Typical range: ~300-500 tokens.
-- Flag if hook scripts read large data (e.g., querying >5 brain records, reading full files, or injecting >1K estimated tokens).
+SessionStart hooks can inject context per-session (e.g., brain-context.py queries brain.db for session summary + hot memories). This context is dynamic and not statically measurable, but impacts per-session token budget.
+- Read SessionStart hook scripts to estimate injected token count. With L0+L1 pattern: ~50 tokens (last session summary + top-2 hot memories ≤80 chars each). Flag if brain-context.py is still injecting recent decisions + preferences sections (pre-L0/L1 pattern: ~300-500 tok).
+- Flag if hook scripts read large data (e.g., querying >5 brain records, reading full files, or injecting >200 estimated tokens).
 - Note: this is an estimate for the report's Limitations section — it cannot be precisely measured without running the hook.
+
+### 3i.2. Per-prompt injection (UserPromptSubmit hook)
+
+prompt-context.py fires on every user prompt and injects brain memories + optionally tool descriptions. Separate from SessionStart overhead.
+
+Check prompt-context.py for:
+- **CRITICAL**: `sections.append("Relevant tools:` present in `main()` → Semantic Toolbox still auto-injecting. Expected config: toolbox removed from hook, on-demand via explicit `brain_tools()` MCP calls only. Waste: ~400-600 tok/prompt.
+- **WARNING**: No trivial-prompt gate before Phase 1 — look for word-count check (`len(prompt_words) <= 4 and "?" not in stripped`). Without it, filler prompts ("ok", "tiếp tục") trigger full FTS5+vector search.
+- **INFO**: Confirm `MAX_INJECTED_CHARS` cap (3000 chars ~750 tok) and skip-if-unchanged logic are both present — these are the main guards against token runaway in long sessions.

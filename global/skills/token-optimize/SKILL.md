@@ -77,7 +77,8 @@ Cross-reference measured data for waste patterns:
 - **3f. Missing optimizations** — no .claudeignore despite build dirs, no rules/ dir despite large CLAUDE.md, stale additionalDirectories
 - **3g. Cache-hostile patterns** — MCP configs or model switching that invalidates prompt cache mid-session
 - **3h. Brain file sprawl** — multiple `~/.claude/brains/*.md` files accumulating always-on cost across ecosystem projects. Each brain file is always-on for every project that @imports it
-- **3i. Hook dynamic overhead** — SessionStart hooks that inject context (e.g., brain-context.py). Estimated ~300-500 tokens per session. Not statically measurable but worth noting
+- **3i. Hook dynamic overhead** — SessionStart hooks that inject context (e.g., brain-context.py). With L0+L1 hard-cap pattern: ~50 tokens per session (last session summary + top-2 hot memories). Not statically measurable but worth noting. Per-prompt injection is a separate layer — see 3i.2.
+- **3i.2. Per-prompt injection (UserPromptSubmit hook)** — prompt-context.py fires on every prompt. Budget-capped: memories 3K chars (~750 tok). Semantic Toolbox should be removed from auto-inject (on-demand via brain_tools() only). Trivial gate (≤4 words + no ?) skips all injection for filler prompts. Expected overhead: ~200-500 tok/working prompt, 0 for filler. Flag if: (a) toolbox still auto-injecting — check prompt-context.py main() for `sections.append("Relevant tools:` block, (b) trivial-prompt gate absent from prompt-context.py.
 
 → Full detection criteria and issue taxonomy (Critical/Warning/Info): `references/measurement-guide.md`
 

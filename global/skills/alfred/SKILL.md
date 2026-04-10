@@ -144,13 +144,23 @@ Use **NOW** (from Step 2) to split the day:
 
 ## Step 5: Build Proposal
 
+### Big Task Focus Mode (04/2026)
+
+When optimizing, check for active big tasks (parent tasks with "Done when:" in description):
+- Show active big tasks as **focus candidates** — suggest 1-2 based on recency, phase importance, energy
+- Protect large uninterrupted blocks for deep work on chosen big task — don't micro-schedule
+- Don't split big task focus across multiple small time slots
+- Calendar = immovable events + daily habits + protection blocks. Task scheduling = suggest focus, not fill every slot
+- If Hải chooses wander → protect entire day: no tasks, no optimization. Calendar block "🌊 Wander" as protection only
+
 ### Scheduling Priority Order
 
 1. 🔒 **Immovable events** — meetings with others, đám cưới, appointments
 2. 🔗 **Daily Habits** — recurring calendar events (06:30-07:55), already placed, respect as immovable
-3. ⚔️ **Main Quests** — placed in optimal energy windows based on `high_energy`/`medium_energy`/`low_energy` labels
-4. 🎮 **Side Quests** — fill remaining gaps
-5. 💡 **Tips** — suggestions that don't need action (đọc sách trên xe, etc.)
+3. 🎯 **Big Task Focus** — active prove goals, large uninterrupted blocks in PEAK windows
+4. ⚔️ **Main Quests** — placed in optimal energy windows based on `high_energy`/`medium_energy`/`low_energy` labels
+5. 🎮 **Side Quests** — fill remaining gaps
+6. 💡 **Tips** — suggestions that don't need action (đọc sách trên xe, etc.)
 
 **Deadline override:** Tasks with `deadlineDate` within 48h move up one tier in scheduling priority. Alfred flags these with ⚠️ in the proposal.
 
@@ -312,6 +322,28 @@ Keywords: "audit", "health check", "kiểm tra". Full Todoist structure verifica
 
 When mode is add quest (task-like content):
 
+### Pre-check: Big Task vs Small Task
+
+**Big task** (prove goal): user describes an outcome, goal, or pipeline to prove. Keywords: "build", "prove", "pipeline", "learn", "habit", "master", "xây dựng", "thử nghiệm"
+- Create as parent task with prove condition in description: `"Done when: [condition]"`
+- NO deadline, NO duration estimate
+- Section: classify by domain (same tree as small tasks)
+- Priority: p2 (Main Quest) or p3 (Side Quest)
+- Subtasks added over time as log entries — actions, notes, discoveries
+- Close parent = pipeline proven
+
+**Small task**: specific, bounded action with clear deliverable
+- Follow existing classification tree below
+- Deadlines + duration: normal (bounded work = time-boxable)
+
+**Subtask of big task**: user mentions a big task name ("thêm X vào Prove Y", "subtask cho Build Wildtide")
+- Search for parent big task by name (`find-tasks` with `labels: ["prove"]`, match content)
+- Create with `parentId` = found big task ID
+- Deadline + duration: allowed (subtasks are bounded actions inside open-ended goals)
+- Include `Serves: 🎯 [parent name]` in description
+
+**Wander protection**: If Hải says "wander day" / "ngày tự do" / "nhàn tản" → do NOT create any tasks. Protect with calendar block `🌊 Wander` (description: `[alfred]`) if requested.
+
 ### Step Q1: Parse Intent
 
 Read `$ARGUMENTS` and the user's message:
@@ -367,6 +399,7 @@ For each task, classify using this decision tree:
 - User specifies ("1h", "30 phút", "2 tiếng") → use exact value
 - No mention → estimate from energy label: 90m (high), 45m (medium), 30m (low)
 - Always set `duration` — powers calendar view + Mode 2 slot allocation
+- **Exception:** Big tasks (prove goals) → NO duration. Prove phase is not time-boxable
 
 **6. Create tasks:**
 - Call `mcp__todoist__add-tasks` with ALL tasks in a single batch call
