@@ -40,6 +40,6 @@ if [ "$DRIFT" -gt 0 ]; then
     echo ""
     echo "--- Registry Drift ($DRIFT) ---"
     printf "$ISSUES"
-    echo "Run: bash ag-registry-audit.sh for details"
+    echo "Run: bash bin/ag-registry-audit.sh for details"
     echo "---"
 fi

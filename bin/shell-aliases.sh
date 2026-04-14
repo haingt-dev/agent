@@ -1,10 +1,11 @@
 #!/bin/bash
 # Agent Global Hub - Shell Aliases
 # Source this file in your ~/.zshrc or ~/.bashrc:
-# source ~/Projects/agent/shell-aliases.sh
+# source ~/Projects/agent/bin/shell-aliases.sh
 
-# Load local env (not committed)
-[ -f "$(dirname "${BASH_SOURCE[0]:-$0}")/.env" ] && source "$(dirname "${BASH_SOURCE[0]:-$0}")/.env"
+# Load local env (not committed) — lives at repo root, one level above bin/
+_AGENT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
+[ -f "$_AGENT_ROOT/.env" ] && source "$_AGENT_ROOT/.env"
 
 # ============================================
 # AGENT GLOBAL HUB NAVIGATION
@@ -27,7 +28,7 @@ alias dic='cd ~/Projects/digital-identity && claude --continue'
 # ============================================
 
 # Bootstrap new project
-alias bootstrap='~/Projects/agent/bootstrap-project.sh'
+alias bootstrap='~/Projects/agent/bin/bootstrap-project.sh'
 
 # Edit Memory Bank in current project
 mbk() {

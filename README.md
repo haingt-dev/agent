@@ -22,22 +22,27 @@ Claude Code is powerful but each project is an island. Configuration, skills, an
 
 ```
 ~/Projects/agent/
-├── bootstrap-project.sh    # Bootstrap new project + auto-register in hub
-├── ag-sync-rules.sh        # Sync shared rules to child projects + update registry
-├── ag-registry-audit.sh    # Full drift check: registry vs actual state
-├── registry.json           # Reverse index of all child projects
-├── shell-aliases.sh        # Shell shortcuts (source in ~/.zshrc)
+├── bin/
+│   ├── bootstrap-project.sh   # Bootstrap new project + auto-register in hub
+│   ├── ag-sync-rules.sh       # Sync shared rules to child projects + update registry
+│   ├── ag-registry-audit.sh   # Full drift check: registry vs actual state
+│   └── shell-aliases.sh       # Shell shortcuts (source in ~/.zshrc)
+├── registry.json              # Reverse index of all child projects
+├── global/                    # Source of truth for ~/.claude/ (symlinked out)
+│   ├── CLAUDE.md              # Global identity/values
+│   ├── brains/                # Shared cross-project context (e.g., indie-ecosystem.md)
+│   ├── skills/                # Global skills (alfred, mentor, ship, research, ...)
+│   └── settings.json
 ├── .claude/scripts/
-│   └── registry-check.sh   # SessionStart hook: lightweight drift alert
+│   └── registry-check.sh      # SessionStart hook: lightweight drift alert
 ├── plugins/
-│   ├── haint-core/         # Core plugin: hooks (SessionStart, PreToolUse, Notification)
-│   └── godot-dev/          # Godot plugin: gdformat, GDScript workflows
+│   ├── haint-core/            # Core plugin: hooks (SessionStart, PreToolUse, PreCompact, ...)
+│   └── godot-dev/             # Godot plugin: gdformat, GDScript workflows
+├── mcp/
+│   └── haingt-brain/          # Custom MCP server: semantic memory + knowledge graph
+├── memories/                  # Auto-memory storage (symlinked from ~/.claude/projects/*/memory)
 └── templates/
-    ├── memory-bank/        # Templates for new project Memory Banks
-    │   └── stories/        # Story template + index
-    ├── agents/             # Sub-agent templates (code-reviewer, security-reviewer)
-    ├── .env.example
-    └── .gitignore-secrets
+    └── memory-bank/           # Templates for new project Memory Banks
 ```
 
 ## Per-Project Structure
@@ -90,10 +95,10 @@ The hub maintains a reverse index (`registry.json`) of all child projects — wh
 | Component | Role |
 |-----------|------|
 | `registry.json` | Source of truth: project metadata, resources used |
-| `ag-registry-audit.sh` | Full audit: compares registry against filesystem + installed_plugins.json |
+| `bin/ag-registry-audit.sh` | Full audit: compares registry against filesystem + installed_plugins.json |
 | `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, alerts on drift |
-| `bootstrap-project.sh` | Auto-registers new projects on bootstrap |
-| `ag-sync-rules.sh` | Updates registry rules after syncing |
+| `bin/bootstrap-project.sh` | Auto-registers new projects on bootstrap |
+| `bin/ag-sync-rules.sh` | Updates registry rules after syncing |
 
 **Drift detection**: hybrid pull model — hub SessionStart detects drift automatically, scripts that modify children update the registry as a side effect.
 

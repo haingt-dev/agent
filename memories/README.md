@@ -1,25 +1,20 @@
 # Memories
 
-This directory stores per-project memory files used by the agent hub for cross-project context.
+Auto-memory storage for all Claude Code projects in `~/Projects/`.
 
-## Structure
+## How it works
+
+`~/.claude/projects/<slug>/memory` is symlinked INTO the matching subdir here. Claude Code reads/writes `MEMORY.md` + feedback files through the symlink; the canonical bytes live in this repo.
 
 ```
 memories/
-├── global/          # Global memories (shared across all projects)
-│   └── MEMORY.md
-├── <project>/       # Per-project memories
-│   ├── MEMORY.md    # Memory index
-│   └── *.md         # Individual memory files
+└── <project>/       # Symlink target from ~/.claude/projects/<slug>/memory
+    ├── MEMORY.md    # Memory index
+    └── *.md         # Individual memory files (feedback, gotchas, decisions)
 ```
+
+Empty subdirs (e.g., projects with no auto-memory yet) are placeholders — **do not delete**. Removing a subdir breaks auto-memory for that project until Claude recreates the link.
 
 ## Privacy
 
 Memory files contain personal context (behavioral patterns, career info, health data, financial snapshots) and are **gitignored** by default. They are never committed to the repository.
-
-## How It Works
-
-- Claude Code auto-memory (`~/.claude/projects/*/memory/`) manages per-project memories
-- The hub's `memories/` directory provides a centralized view for cross-project skills
-- Memory files are created/updated by Claude during conversations
-- The `MEMORY.md` index in each directory links to individual memory files
