@@ -24,7 +24,6 @@ Claude Code is powerful but each project is an island. Configuration, skills, an
 ~/Projects/agent/
 ├── bin/
 │   ├── bootstrap-project.sh   # Bootstrap new project + auto-register in hub
-│   ├── ag-sync-rules.sh       # Sync shared rules to child projects + update registry
 │   ├── ag-registry-audit.sh   # Full drift check: registry vs actual state
 │   └── shell-aliases.sh       # Shell shortcuts (source in ~/.zshrc)
 ├── registry.json              # Reverse index of all child projects
@@ -98,7 +97,6 @@ The hub maintains a reverse index (`registry.json`) of all child projects — wh
 | `bin/ag-registry-audit.sh` | Full audit: compares registry against filesystem + installed_plugins.json |
 | `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, alerts on drift |
 | `bin/bootstrap-project.sh` | Auto-registers new projects on bootstrap |
-| `bin/ag-sync-rules.sh` | Updates registry rules after syncing |
 
 **Drift detection**: hybrid pull model — hub SessionStart detects drift automatically, scripts that modify children update the registry as a side effect.
 
