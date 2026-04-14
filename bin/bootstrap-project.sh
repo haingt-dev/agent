@@ -62,28 +62,18 @@ if [ ! -f "$CLAUDE_DIR/CLAUDE.md" ]; then
     cat > "$CLAUDE_DIR/CLAUDE.md" << EOF
 # Claude Code — $PROJECT_NAME
 
-## Project Values
-- **Minimal impact** — Make the smallest changes necessary. Don't over-engineer
-- **No dirty state** — Don't leave the environment broken. Verify changes work before completing a task
-- **Reversibility** — Ensure significant changes can be undone if needed
+## What Is This
+<!-- 2-3 sentences: purpose, stack, goal. -->
 
-### Boundaries
-<!-- TODO: Add project-specific boundaries -->
+## Values
+<!-- Project-specific working principles. Delete if none. -->
 
-## Memory Bank
-Auto-loaded at session start. Full files in \`.memory-bank/\`:
-- \`brief.md\` — Project goals and scope
+## Context Sources
+- \`.memory-bank/brief.md\` — compact anchor (identity + current focus)
+- **haingt-brain** — dynamic context (\`brain_recall\` at session start, \`brain_save\` after major work)
 
-After major tasks, update brief.md if project direction has changed.
-
-## Security
-**CRITICAL**: NEVER commit, push, or expose secrets, API keys, tokens, or credentials to version control.
-
-- NEVER hardcode secrets in code — use environment variables and \`.env\` files
-- NEVER commit files containing secrets — verify with \`git diff --cached\` before committing
-- ALWAYS check \`.gitignore\` has \`.env*\`, \`credentials.*\`, \`secrets.*\`, \`*.key\`, \`*.pem\`
-- ASK before committing sensitive-looking files (\`config.json\`, \`.env*\`, \`credentials.*\`)
-- If secrets are accidentally committed: STOP, alert user to revoke, remove from history, add to \`.gitignore\`
+## Rules
+<!-- Project-specific rules. Delete if none. Secrets/dangerous-command enforcement is handled by haint-core PreToolUse hook — do not duplicate here. -->
 EOF
     echo "  ✓ CLAUDE.md"
 else
