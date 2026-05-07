@@ -23,6 +23,7 @@
       "Bash(git reset --hard*)",
       "mcp__claude_ai_Gmail__*"
     ],
+    "defaultMode": "auto",
     "additionalDirectories": [
       "/home/haint/Projects/agent",
       "/home/haint/Projects/Bookie",
@@ -38,7 +39,8 @@
   },
   "enabledPlugins": {
     "haint-core@haint-marketplace": true,
-    "skill-creator@claude-plugins-official": true
+    "skill-creator@claude-plugins-official": true,
+    "mcp-server-dev@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "haint-marketplace": {
@@ -49,5 +51,7 @@
     }
   },
   "effortLevel": "high",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "skipAutoPermissionPrompt": true
 }
