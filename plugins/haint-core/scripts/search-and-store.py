@@ -58,7 +58,7 @@ def _distill_to_facts(raw_content: str, tool_type: str) -> str:
             return ""  # No API key → skip save (no raw dump)
 
         response = client.chat.completions.create(
-            model="gpt-4.1-nano",
+            model="gpt-5.4-nano",
             messages=[{
                 "role": "user",
                 "content": f"""Extract 1-3 key facts from this {tool_type} result. Rules:

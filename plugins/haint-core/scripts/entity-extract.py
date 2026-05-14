@@ -70,7 +70,7 @@ Findings:
         req = urllib.request.Request(
             "https://api.openai.com/v1/chat/completions",
             data=json.dumps({
-                "model": "gpt-4.1-nano",
+                "model": "gpt-5.4-nano",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 500,
                 "temperature": 0.0,

@@ -267,7 +267,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
 - **Trigger**: After WebSearch, WebFetch, or Context7 query-docs completes
 - **Input**: `{"tool_name": "...", "tool_input": {...}, "tool_result": "..."}`
 - **P1 Entropy filter**: Skip if content <80 chars or cosine sim ≥0.75 with existing memory
-- **P2 Atomic decomposition**: LLM distills raw results into 1-3 self-contained facts (gpt-4.1-nano)
+- **P2 Atomic decomposition**: LLM distills raw results into 1-3 self-contained facts (gpt-5.4-nano)
 - **Action**: Parse result → write to brain.db as type=discovery, tags=[tool_type, "auto-captured"]
 - **Embedding**: Attempted via brain venv Python (graceful fail → FTS-only is still useful)
 - **Output**: Reminder to brain_save for deeper analysis
@@ -293,7 +293,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
 ### Stop → `entity-extract.py`
 - **Trigger**: After Claude finishes a response (Stop hook)
 - **Action**: Regex extraction of entities (tools, technologies, projects, people) from the assistant turn
-- **LLM Distillation**: After regex extraction, the top 5 findings are passed to gpt-4.1-nano for refinement into atomic facts with confidence scores. Low-confidence extractions are discarded.
+- **LLM Distillation**: After regex extraction, the top 5 findings are passed to gpt-5.4-nano for refinement into atomic facts with confidence scores. Low-confidence extractions are discarded.
 - **Output**: Writes type=entity memories directly to brain.db (direct SQLite, no MCP)
 
 ### PreToolUse (Bash) → `pre-tool-safety.sh`
@@ -327,7 +327,7 @@ Five strategies, all in `consolidate.py`:
 
 ### cluster_and_synthesize (P3 — recursive consolidation)
 - Group memories by (project, type), find clusters of 3+ with cosine sim ≥ 0.65
-- LLM synthesizes cluster into one abstract memory (via gpt-4.1-nano)
+- LLM synthesizes cluster into one abstract memory (via gpt-5.4-nano)
 - Originals get `part_of` relation to synthesis, importance halved
 - Only processes memories >7 days old. Max 3 clusters per run (LLM cost control)
 - **Idempotence guard**: candidate query excludes anything already involved in a synthesis — both `target_id` (the synthesis itself) AND `source_id` (originals already folded in). Without this, each run reads its own output and re-synthesizes indefinitely.
@@ -586,7 +586,7 @@ Context approaching limit → /compact triggered
 | **Circuit breaker for consolidation** | Repeated API/DB errors during consolidation can silently degrade the system. 3-strike disable surfaces the problem and prevents runaway failure loops. Manual override via brain_session("consolidate") always works. |
 | **PID-based file lock for consolidation** | Multiple Claude Code windows can run simultaneously, each starting a session. Without a lock, concurrent consolidation runs corrupt merge operations (both see same duplicates, both delete one copy). |
 | **Staleness suffix in brain-context.py** | Injected memories had no recency signal — a 30-day-old decision looked identical to a 1-day-old one. `(Nd ago)` suffix gives Claude immediate signal to weight recent context higher, zero extra tokens. |
-| **LLM distillation in entity-extract.py** | Regex extraction catches entities but not intent or confidence. gpt-4.1-nano post-processing refines top 5 into atomic facts with scores. Eliminates false-positive entities (e.g., common words matched by regex). |
+| **LLM distillation in entity-extract.py** | Regex extraction catches entities but not intent or confidence. gpt-5.4-nano post-processing refines top 5 into atomic facts with scores. Eliminates false-positive entities (e.g., common words matched by regex). |
 | **Search-and-Store auto-capture** | Every un-saved WebSearch result = knowledge lost. PostToolUse hook auto-persists to brain. Future brain_recall finds past searches without re-searching. |
 | **Per-prompt context injection** | SessionStart injects brain context once. UserPromptSubmit injects per message. More targeted — Claude sees relevant memories for each specific question. |
 
