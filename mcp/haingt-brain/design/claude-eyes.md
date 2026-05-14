@@ -329,3 +329,48 @@ After 5 sessions with Phase 1 deployed:
 - Session 2026-04-10 gap audit — concrete example of relational blindness costing ~10K tokens
 - CodeSight wiki mode — closest existing approach to radar concept
 - Cursor/Cody/Zed context systems — pull-based semantic search (nobody does push-based lazy radar)
+
+---
+
+## Epilogue — Concept Abandoned 2026-04-14
+
+**Three generations attempted. All failed. Concept retired.**
+
+### Generation 1: Pull-based lazy-eye (this doc's original design)
+`brain_radar` / `brain_outline` / `brain_index` MCP tools. Claude supposed to call them "before blind search" per CLAUDE.md directive. Empirical test in Idea_Vault (session `7da14f76`, 8 prompts, 22 tool calls): **0 eye calls**. Claude used primitive `Bash ls` / `Grep '^#+\s'` instead.
+
+### Generation 2: CLAUDE.md rewrite with open/close conditions
+Replaced blanket rule with conditional guidance ("open eyes when entering fresh project, close eyes when editing known file"). Wildtide test (session `1c74b1a6`): **still 0 eye calls**. Claude's Bash bias stronger than instruction. Matches AGENTIF 2025 research: conditional tool-use instructions get <30% compliance from best LLMs.
+
+### Generation 3: Push-based Workspace Eye (brain-backed, ship-triggered)
+Deployed 2026-04-14 afternoon. Pre-generated project eye stored as brain entity, auto-injected at session-start (no model decision required). First-session fallback auto-generates via `brain_radar`. Updated by `/ship` Step 7.6.
+
+Tested same day in Wildtide (session `e1713d88`, 3 prompts, baseline 8 tool calls). Result: **12 tool calls = +50% vs baseline**. Eye was injected and read correctly, but Claude explored deeper instead of using eye as ground truth. Answer quality ~30% richer (autoloads named, per-module counts, conventions drift observation) but cost-benefit negative.
+
+### Root cause across all three generations
+
+Two intersecting forces neither push nor pull architectures overcame:
+1. **Training bias**: `Bash ls` / `Grep` are primitives LLMs have seen in millions of training examples. Custom MCP tools (brain_radar et al.) are novel — model defaults to familiar.
+2. **Verification habit**: RLHF-trained to verify before acting. Context-available-but-not-verified feels uncertain; model re-reads anyway.
+
+Push-based eye in context didn't override either. Claude saw eye, acknowledged it, then did its own exploration on top.
+
+### What was deleted (2026-04-14 evening)
+
+- `brain_radar`, `brain_outline`, `brain_index` MCP tools → all removed from server
+- `tools/radar.py`, `tools/outline.py`, `tools/index.py` → deleted files
+- `workspace-eye-inject.py` → deleted
+- session-start.sh workspace eye block → removed
+- ship SKILL.md Step 7.6 → removed
+- `~/.claude/CLAUDE.md` § Eyes (and Workspace Eye) → removed
+- 3 brain workspace entities (Wildtide, ecosystem, Learning_English) → forgotten
+
+### What was preserved as learning
+
+- This design doc (read as "three-strike record")
+- Brain decisions: gate rejection (`6b6c6a1d91d9`), tool-adoption research (`c273922fd06a`), workspace-eye-shipped-then-reverted (`47cd53e6f134`)
+- Historical plans in `~/.claude/plans/`
+
+**Do not revive without fundamentally new evidence.** Three independent approaches failed against the same underlying LLM behavior. A fourth attempt needs a new theory, not a new implementation.
+
+See reversal plan: `~/.claude/plans/declarative-swinging-sedgewick.md`

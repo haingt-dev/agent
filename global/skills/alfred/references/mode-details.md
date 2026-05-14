@@ -95,7 +95,7 @@ Use `AskUserQuestion`: "Tasks nào đã hoàn thành hôm nay?" — expect numbe
 
 If a task description is too vague to classify:
 - Use whatever context is available from the conversation to infer intent
-- Default to **Main Quests / 💰 Income, p2, medium_energy** — safest middle ground
+- Default to **🏠 Personal, p3, medium_energy** — safest middle ground when thread unclear
 - Mention your reasoning so the user can correct if wrong
 - Never leave a task unclassified or put it in Inbox
 
@@ -147,9 +147,8 @@ WEEK_START=$(date -d "2026-01-01 +$((11-1)) weeks -$(date -d '2026-01-01' +%u) d
 
 ### Step R3: Build & Propose
 
-**Completed tasks** — group by project/section:
-- ⚔️ Main Quests: Income / Growth / Family / Milestones
-- 🎮 Side Quests: Passion / Life
+**Completed tasks** — group by project:
+- 👨‍👩‍👧 Family / 🎮 Wildtide / 💼 Upwork / 👥 Community / 📚 Learning Queue / 🏠 Personal
 - Sort by completion date within each group
 - Skip recurring daily habits (Anki, ELSA, Mini Output, Exercise) — they clutter the review
 
@@ -202,9 +201,8 @@ Triggered by "audit", "health check", "kiểm tra". Full Todoist structure verif
 
 ### Step A1: Fetch Structure (parallel)
 
-- `find-sections` for Main Quests (`6g6f74cmqrRj2937`) — verify 4 sections (💰 Income, 🧠 Growth, 👨‍👩‍👧 Family, 🏆 Milestones)
-- `find-sections` for Side Quests (`6g6f74h9JQXGVX6p`) — verify 2 sections (🎯 Passion, 🏠 Life)
-- `find-tasks` per section — count and list all active tasks
+- `find-projects` — verify 6 thread projects exist (👨‍👩‍👧 Family `6gP48vF9XcpxmVQM`, 🎮 Wildtide `6gP48vCVW8rV9h6x`, 💼 Upwork `6gP48vGx5f48Gp24`, 👥 Community `6gP48vFJgRP5WMVJ`, 📚 Learning Queue `6gCQVHrg84qQ84cv`, 🏠 Personal `6gP48vCqQcvG9wR6`)
+- `find-tasks` per project — count and list all active tasks
 - `find-tasks` with filter `created before: -30 days & no date & !recurring` — stale tasks
 - `find-tasks` with filter `!@high_energy & !@medium_energy & !@low_energy` — unlabeled tasks
 
@@ -213,8 +211,6 @@ Triggered by "audit", "health check", "kiểm tra". Full Todoist structure verif
 | Check | How | Flag if |
 |-------|-----|---------|
 | Sections exist | Compare A1 sections vs SKILL.md reference IDs | Missing section → ⚠️ MISSING |
-| Milestones populated | Count tasks in 🏆 Milestones | 0 tasks → ⚠️ EMPTY |
-| Deadline coverage | Milestones without `deadlineDate` | Missing → ⚠️ NO DEADLINE |
 | Stale tasks | >30 days, no date, not recurring | Present → 🧹 STALE |
 | Priority drift | Main Quest tasks with p3/p4, Side Quest with p1 | Wrong tier → ⚠️ PRIORITY |
 | Label hygiene | Tasks missing energy label | Missing → ⚠️ NO LABEL |

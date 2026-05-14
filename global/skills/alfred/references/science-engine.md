@@ -60,9 +60,9 @@ W+6h to W+8h     → MID-DAY: Mix low_energy + medium_energy. Circadian dip.
                     20min nap if needed. Stop cold brew at Bed−6h.
 W+8h to W+9.5h   → PRE-DINNER: medium_energy or 🏠 Life admin.
                     Intense exercise here if planned (~15:00-16:00 normal day)
-W+9.5h to W+10h  → ĐÓN VỢ (16:15 normal day)
-W+10h to W+14h   → VỢ TIME (non-negotiable): nấu ăn, dinner, quality time
-                    Eating window opens. Walk 10min after dinner.
+W+9.5h to W+10h  → PRE-DINNER wind-down
+W+10h to W+14h   → DINNER + FAMILY CALL (distance-parenting window)
+                    Eating window opens. Call Duyên/Sa. Walk 10min after dinner.
 W+14h to W+15h   → Fork: early wake tomorrow → bed. Normal → creative/reading
 W+15h to W+16h   → WIND-DOWN: screens off 30min before bed
 W+16h+            → SLEEP
@@ -100,17 +100,17 @@ Hải's brain measures progress by **pipeline proven**, not output quantity. A t
 - **Deep work protection:** Min 1 unscheduled 60min+ block/day.
 - **Daily Habits (Calendar):** Exercise/Anki/ELSA/Mini Output are recurring calendar events at 06:30-07:55. Already placed — alfred doesn't need to schedule them, but respects their time block when optimizing.
 - **Reading slot:** Actively suggest: W+7h (circadian dip, perfect for low_energy reading) OR post-dinner 20:00-21:00.
-- **Evening after đón vợ:** 16:15-17:00 transition. 17:00-20:00/21:00 = vợ time (NON-NEGOTIABLE, NOT schedulable). After ~20:00-21:00 = Hải's personal time.
-- **Creative/Passion:** After vợ time (~21:00-22:00). On early-wake days: skip, go to bed.
+- **Evening structure:** 17:00-19:00 = dinner + call Duyên/Sa window. 19:00-21:00 = Hải's personal time. After 21:00 = Upwork block (Mon-Thu) hoặc creative.
+- **Creative/Passion:** 21:00-22:00 (post-dinner). On early-wake days: skip, go to bed.
 - **Burnout guard:** If schedule has 0 genuine leisure (not productive rest), flag it. If >2 high_energy blocks + early wake, flag: "is this realistic?" If prove task scheduled after social drain or in evening, flag: "systems completionist pattern — prove phase needs peak energy, not leftovers."
 
-## 4j. Phase Capacity
+## 4j. Capacity by Baby Period
 
-Determine current phase from today's date → apply capacity:
-- Phase 0 (Mar 2026): 100% → 2-3 deep blocks, full quest load
-- Phase 1 (Apr-Jun): **Pre-birth: 80%** → 2 deep blocks, near-full load. **Post-birth: 40%** → 1 deep block, baby naps only. Transition = actual birth date. Until told "Sa đã chào đời", assume pre-birth.
-- Phase 2 (Jul-Sep): 60-70% → 2 deep blocks, moderate load
-- Phase 3 (Oct+): 100% → full capacity
+Current capacity (Sa sinh 2026-04-16, Duyên ở cữ Hóc Môn):
+- Hải solo HCMC, Duyên + Sa ở Hóc Môn (~3 tháng cữ)
+- Capacity: ~60-70% → 1-2 deep blocks/ngày. No đưa/đón constraints, flexible wake/work structure
+- Weekend Hóc Môn visits: afternoon + evening family. Morning = only productive window
+- Night owl window (21:00-01:00) most reliable cho Upwork block
 
 ## 4k. Night Owl Sleep Management (CRITICAL)
 
@@ -119,7 +119,7 @@ Determine current phase from today's date → apply capacity:
 - This is the #1 schedule-killer.
 
 Rules:
-- Tomorrow wake early (<6:00): **bed anchored to 21:00 sleep gate.** Vợ time ends → bed. No "just one more thing." Flag prominently.
+- Tomorrow wake early (<6:00): **bed anchored to 21:00 sleep gate.** Dinner ends → bed. No "just one more thing." Flag prominently.
 - Normal wake (6:00): bedtime 22:00-22:30.
 - **Screen cutoff = 30min before target bedtime.** Early-wake days: screens off by 20:30.
 - **If bed before 21:00 required** (e.g., wake 4:00): flag "extremely difficult for your chronotype."
@@ -136,7 +136,7 @@ The second wind after 21:00 is NOT purely a sleep-management risk — it's also 
 **Scheduling rule for this window:**
 - Normal wake tomorrow (06:00): 21:00-22:30 is productive, then wind-down 22:00-22:30.
 - Early wake tomorrow (<06:00): DO NOT use this window. Bed anchored to 21:00.
-- Mon-Thu only. Fri-Sun: natural unwinding after vợ time, no scheduled work.
+- Mon-Thu only. Fri-Sun: natural unwinding, no scheduled work.
 
 ## 4l. Contextual Modifiers
 
@@ -145,5 +145,5 @@ The second wind after 21:00 is NOT purely a sleep-management risk — it's also 
 - **Social events (đám cưới, gatherings):** INTJ energy drain. 2h+ recovery buffer after.
 - **Weekend — về ngoại (Hóc Môn):** ~2 Sundays/month. Afternoon + evening = family. Morning = only productive window.
 - **Weekend — ở nhà:** Skeleton relaxes. Wake +1h. Longer deep work if rested.
-- **Duyên's schedule:** Variable — she works weekends, holidays, any day. NEVER assume weekday-only. Always check calendar for đưa/đón vợ events on the target date. If present → they are immovable anchors.
+- **Duyên's schedule:** ở cữ Hóc Môn (từ 04/2026) — không đi làm. Hải solo HCMC, lịch không có đưa/đón constraint. Weekend visits Hóc Môn cho family time.
 - **Late wake (>09:00, second wind aftermath):** W = NOW. PEAK 1 gone. NOW to NOW+1.5h = WAKE ZONE. NOW+1.5h to NOW+3h = sole PEAK. Max 1 deep block. Anchor tonight's bed to 22:00. Do NOT try to "catch up" — compressed day = lower ambition.

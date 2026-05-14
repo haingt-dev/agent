@@ -4,7 +4,7 @@ disable-model-invocation: false
 description: "Life scheduler — quests, optimize, cleanup, weekly review"
 argument-hint: "[event/task description / optimize today/tomorrow / cleanup / date]"
 model: sonnet
-allowed-tools: mcp__claude_ai_Google_Calendar__gcal_list_events, mcp__claude_ai_Google_Calendar__gcal_create_event, mcp__claude_ai_Google_Calendar__gcal_update_event, mcp__claude_ai_Google_Calendar__gcal_delete_event, mcp__claude_ai_Google_Calendar__gcal_find_my_free_time, mcp__todoist__find-tasks-by-date, mcp__todoist__find-tasks, mcp__todoist__update-tasks, mcp__todoist__add-tasks, mcp__todoist__complete-tasks, mcp__todoist__reschedule-tasks, mcp__todoist__find-completed-tasks, Read, AskUserQuestion, Bash
+allowed-tools: mcp__claude_ai_Google_Calendar__gcal_list_events, mcp__claude_ai_Google_Calendar__gcal_create_event, mcp__claude_ai_Google_Calendar__gcal_update_event, mcp__claude_ai_Google_Calendar__gcal_delete_event, mcp__claude_ai_Google_Calendar__gcal_find_my_free_time, mcp__todoist__find-tasks-by-date, mcp__todoist__find-tasks, mcp__todoist__update-tasks, mcp__todoist__add-tasks, mcp__todoist__complete-tasks, mcp__todoist__reschedule-tasks, mcp__todoist__find-completed-tasks, mcp__todoist__find-projects, mcp__todoist__add-reminders, mcp__todoist__find-reminders, mcp__todoist__update-reminders, mcp__todoist__delete-object, mcp__todoist__get-productivity-stats, Read, AskUserQuestion, Bash
 ---
 
 # Alfred — Life Scheduler
@@ -32,15 +32,15 @@ Read Google Calendar + Todoist, then propose schedule changes using science-base
 
 ## Todoist Quick Reference
 
-**⚔️ Main Quests** (`6g6f74cmqrRj2937`)
-- 💰 Income (`6g6f74h58rpwpv47`) — Upwork, portfolio, templates, content, freelance
-- 🧠 Growth (`6g6f74jhHXCVgxW7`) — English, Docker, technical skills, learning
-- 👨‍👩‍👧 Family (`6g6f74jrXXg5Pp37`) — baby prep, family events, Duyên support
-- 🏆 Milestones (`6g6h7Qfmj6MGFV97`) — phase decision points ONLY
+Thread-based projects (one per current roadmap thread):
 
-**🎮 Side Quests** (`6g6f74h9JQXGVX6p`)
-- 🎯 Passion (`6g6f74jRJwPPCmWp`) — Wildtide, Bookie, creative projects
-- 🏠 Life (`6g6f74qmvFxphmJG`) — admin, errands, purchases, household
+- 👨‍👩‍👧 Family (`6gP48vF9XcpxmVQM`) — Sa, Duyên support, family events, relatives
+  - Sub-project: Family/Health (`6gQrvR27xG5XvJ9H`) — visits, vaccines, equipment (managed by `/health` skill)
+- 🎮 Wildtide (`6gP48vCVW8rV9h6x`) — game dev, devlog, mechanic prototyping
+- 💼 Upwork (`6gP48vGx5f48Gp24`) — proposals, gig delivery, platform admin
+- 👥 Community (`6gP48vFJgRP5WMVJ`) — Godot Discord, Reddit, n8n forums, engagement tracking
+- 📚 Learning Queue (`6gCQVHrg84qQ84cv`) — English, reading, research, game dev study
+- 🏠 Personal (`6gP48vCqQcvG9wR6`) — home server, hobby projects, household admin
 
 > Read `references/todoist-structure.md` — full labels (energy + topic), priority convention, daily habits reference. Read when creating/updating tasks.
 
@@ -99,22 +99,21 @@ Use **NOW** (from Step 2) to split the day:
 
 **Mode 1 (add event + replan):** Cascade only affects FUTURE events. PAST events are informational only.
 
-**Default daily skeleton** (wake 06:00 — applies ANY day, Duyên's schedule is variable including weekends):
+**Default daily skeleton** (Duyên ở cữ Hóc Môn — Hải solo HCMC, lịch linh hoạt):
 ```
-06:00  Đưa vợ đi làm
-07:00  Deep work block starts
-12:00  [No lunch — IF]
-16:15  Đón vợ
-17:00  Vợ time starts (nấu ăn, dinner, quality time)
-20:00-21:00  Vợ time ends → personal evening
-22:00  Wind-down
-22:30  Sleep
+07:00-07:30  Wake (night owl natural)
+08:30         Deep work block starts (W+1.5h)
+12:00         [No lunch — IF]
+17:00-19:00  Dinner + call Duyên/Sa (distance-parenting window)
+21:00-22:30  Upwork evening block (Mon-Thu) OR personal
+22:00         Wind-down
+22:30         Sleep
 ```
 
 **Wake time detection:**
-- Check calendar for earliest event (đưa vợ, alarm, travel departure)
+- Check calendar for earliest event (alarm, travel departure, meetings, family events)
 - If user specifies wake time → use that
-- Otherwise → 06:00 default
+- Otherwise → 07:00 default
 
 **Important:** The skeleton SHIFTS based on wake time. All scheduling is relative to W (wake time).
 
@@ -158,8 +157,8 @@ When optimizing, check for active big tasks (parent tasks with "Done when:" in d
 1. 🔒 **Immovable events** — meetings with others, đám cưới, appointments
 2. 🔗 **Daily Habits** — recurring calendar events (06:30-07:55), already placed, respect as immovable
 3. 🎯 **Big Task Focus** — active prove goals, large uninterrupted blocks in PEAK windows
-4. ⚔️ **Main Quests** — placed in optimal energy windows based on `high_energy`/`medium_energy`/`low_energy` labels
-5. 🎮 **Side Quests** — fill remaining gaps
+4. ⚔️ **p2 tasks (Family/Wildtide/Upwork/Community)** — placed in optimal energy windows based on `high_energy`/`medium_energy`/`low_energy` labels
+5. 🎮 **p3 tasks (Learning Queue/Personal)** — fill remaining gaps
 6. 💡 **Tips** — suggestions that don't need action (đọc sách trên xe, etc.)
 
 **Deadline override:** Tasks with `deadlineDate` within 48h move up one tier in scheduling priority. Alfred flags these with ⚠️ in the proposal.
@@ -168,9 +167,9 @@ When optimizing, check for active big tasks (parent tasks with "Done when:" in d
 
 When optimizing an evening (Mode 2 for today/tomorrow) on **Mon-Thu**:
 - Schedule `⚔️ Upwork Daily` at **21:00-22:30** (90 min) — US 9AM-10:30AM EST, peak fresh job window.
-- Classification: Main Quests / 💰 Income, `high_energy` (diagnostic thinking for proposals), `execute` phase.
+- Classification: 💼 Upwork, `high_energy` (diagnostic thinking for proposals), `execute` phase.
 - Uses night owl second wind (science-engine.md) — after 21:00, Hải is alert and timing aligns with US morning posts.
-- If vợ time extends past 21:00 → shift to 21:30-23:00.
+- 21:00-22:30 block là default. Nếu có dinner/call Duyên-Sa kéo dài → shift to 21:30-23:00.
 - If early wake tomorrow (<06:00) → skip (bed anchored to 21:00).
 - **Fri-Sun**: do not auto-schedule. Weekends = reply day, not search day.
 
@@ -178,7 +177,7 @@ When optimizing an evening (Mode 2 for today/tomorrow) on **Mon-Thu**:
 
 When a new event conflicts with existing anchors:
 1. Identify all conflicting events
-2. For each: can it move? (đón vợ = maybe, meeting with others = no)
+2. For each: can it move? (family care events = maybe, meeting with others = no)
 3. Propose: move earlier/later, delegate, cancel, or split
 4. Cascade: if anchor moves → downstream events shift too
 5. Todoist tasks: suggest reschedule to another day or fill remaining gaps
@@ -354,17 +353,17 @@ Read `$ARGUMENTS` and the user's message:
 
 For each task, classify using this decision tree:
 
-**1. Which project + section?** (classify by DOMAIN first)
+**1. Which project?** (classify by THREAD first)
 
 | Ask yourself | If YES → | Priority |
 |---|---|---|
 | Is this a recurring daily habit? | Calendar recurring event (not Todoist) — tell user to manage via calendar | — |
-| Income-generating? Upwork, portfolio, templates, content, freelance platforms? | Main Quests / 💰 Income | p2 |
-| Learning, skill-building, English, technical growth? | Main Quests / 🧠 Growth | p2 |
-| Baby, family events, Duyên support, family finances? | Main Quests / 👨‍👩‍👧 Family | p2 |
-| Phase decision point with target date? | Main Quests / 🏆 Milestones | p2 |
-| Personal/creative project (Wildtide, Bookie, game dev)? | Side Quests / 🎯 Passion | p3 |
-| Life admin, errands, purchases, household? | Side Quests / 🏠 Life | p3 |
+| Baby, Duyên, family events, relatives? | 👨‍👩‍👧 Family | p2 |
+| Wildtide dev, devlog, mechanic prototyping? | 🎮 Wildtide | p2 |
+| Upwork proposals, gig delivery, platform admin? | 💼 Upwork | p2 |
+| Community engagement (Discord, Reddit, forums, answering questions)? | 👥 Community | p2 |
+| English, reading, research, game dev study? | 📚 Learning Queue | p3 |
+| Home server, hobby projects, household admin, errands? | 🏠 Personal | p3 |
 
 **2. Energy label?** Apply exactly ONE energy label based on cognitive demand:
 
@@ -374,7 +373,10 @@ For each task, classify using this decision tree:
 | Reviews, coordination, moderate cognitive load | `medium_energy` |
 | Reading, passive learning, light research | `low_energy` |
 
-**3. Topic labels?** Optionally apply topic labels (`english`, `creative`, `life`) for cross-cutting queries.
+**3. Topic labels?** Optionally apply topic labels for cross-cutting queries:
+- Content: `english`, `creative`
+- People (for Family tasks): `sa`, `duyen`, `hai`
+- Care ops (when task liên quan care — alfred có thể thêm bên cạnh `/health` skill): `visit`, `consult`, `vaccine`, `equipment`, `followup`, `health`
 
 **4. Task phase?** (affects scheduling — see science engine 4h)
 
@@ -392,7 +394,6 @@ For each task, classify using this decision tree:
 
 **5b. Hard deadline?**
 - "phải xong trước [date]", "deadline", "nộp trước", "must finish by" → `deadlineDate: "YYYY-MM-DD"`
-- Milestones section → always consider setting deadlineDate
 - No hard deadline → omit
 
 **5c. Duration?**
@@ -403,7 +404,7 @@ For each task, classify using this decision tree:
 
 **6. Create tasks:**
 - Call `mcp__todoist__add-tasks` with ALL tasks in a single batch call
-- Each task must have: `content`, `projectId`, `sectionId`, `priority`, `labels`
+- Each task must have: `content`, `projectId`, `priority`, `labels`
 - Include `description` if user provided extra context
 - Include `dueString` — always present (defaults to "today" if no date mentioned)
 - Include `duration` — always present (from 5c)
@@ -421,14 +422,18 @@ For future date tasks (beyond tomorrow): Todoist only, no materialization.
 
 These examples are the classification ground truth — follow them exactly when a task matches. Only deviate if the user explicitly provides different context.
 
-- "setup personal branding" → Main / 💰 Income, p2, [high_energy, creative]
-- "học Docker" → Main / 🧠 Growth, p2, [high_energy]
-- "đọc sách Atomic Habits" → Side / 🏠 Life, p3, [low_energy]
-- "mua sữa cho vợ" → Side / 🏠 Life, p3, [low_energy, life]
-- "prepare hospital bag" → Main / 👨‍👩‍👧 Family, p2, [high_energy]
-- "build Upwork case study" → Main / 💰 Income, p2, [high_energy]
-- "ELSA Shadowing practice" → Main / 🧠 Growth, p2, [low_energy, english]
-- "review CCNA material" → Main / 🧠 Growth, p2, [high_energy]
+- "setup personal branding" → 💼 Upwork, p2, [high_energy, creative]
+- "học Docker" → 📚 Learning Queue, p3, [high_energy]
+- "đọc sách Atomic Habits" → 📚 Learning Queue, p3, [low_energy]
+- "mua sữa cho vợ" → 🏠 Personal, p3, [low_energy, duyen]
+- "đặt lịch Sa khám vàng da" → 👨‍👩‍👧 Family, p2, [medium_energy, sa, visit]
+- "mua máy hút sữa cho Duyên" → 👨‍👩‍👧 Family, p2, [low_energy, duyen, equipment]
+- "Sa tiêm BCG VNVC" → 👨‍👩‍👧 Family, p2, [medium_energy, sa, vaccine]
+- "build Upwork case study" → 💼 Upwork, p2, [high_energy]
+- "ELSA Shadowing practice" → 📚 Learning Queue, p3, [low_energy, english]
+- "Wildtide devlog post" → 🎮 Wildtide, p2, [creative, medium_energy]
+- "answer r/godot question" → 👥 Community, p3, [low_energy]
+- "setup home server Paperless" → 🏠 Personal, p3, [medium_energy]
 
 ## Mode 5: Weekly Review
 
@@ -456,7 +461,7 @@ These examples are the classification ground truth — follow them exactly when 
 - **NEVER execute before approval** — always show proposal first (Mode 1 & 2; Mode 3 & 4 use their own flows)
 - **NEVER move events involving other people** (meetings) without flagging as CONFLICT
 - **NEVER ignore science** — every scheduling decision includes reasoning
-- **NEVER schedule work during vợ time** (17:00-20:00/21:00)
+- **Respect family blocks** — events có attendees khác (meeting, family care events) = immovable
 - **NEVER put tasks in Inbox** — always classify into a project/section
 - **Daily Habits** are calendar recurring events (06:30-07:55) — respect as immovable blocks, don't recreate in Todoist
 - Do NOT ask user to confirm classification (Mode 4) — make the call, show reasoning

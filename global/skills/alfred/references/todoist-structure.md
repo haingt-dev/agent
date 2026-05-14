@@ -12,18 +12,36 @@ Read when creating/updating tasks and need label semantics or section IDs beyond
 | `medium_energy` | TRANSITION + PRE-DINNER | Reviews, coordination, moderate cognitive load |
 | `low_energy` | MID-DAY dip, post-dinner | Reading, passive learning, light research |
 
-### Topic labels (for cross-cutting queries):
+### Topic labels (content):
 
 | Label | When to apply |
 |-------|---------------|
 | `english` | English/language learning |
 | `creative` | Design, writing, video, art, building |
-| `life` | Personal life management |
-| `chain_english` | Anchor Chain habit only (Anki/ELSA) |
+| `prove` | Goal-tracking (parent tasks cho big task pattern) |
+
+### People labels (for Family project):
+
+| Label | Person |
+|-------|--------|
+| `sa` | Con gái (Nguyễn Hồ Diệp San, sinh 2026-04-16) |
+| `duyen` | Vợ |
+| `hai` | Self (when task về Hải's own health) |
+
+### Care ops labels (primarily from `/health` skill):
+
+| Label | Context |
+|-------|---------|
+| `visit` | Thăm khám, consult bác sĩ |
+| `consult` | Video call tư vấn |
+| `vaccine` | Mũi tiêm |
+| `equipment` | Thiết bị baby/postpartum |
+| `followup` | Follow-up sau visit/vaccine reaction |
+| `health` | General health umbrella |
 
 ## Priority Convention
 
-p1 = reserved (formerly Anchor Chain — now calendar-only). p2 = Main Quests (career/life impact). p3 = Side Quests (optional). p4 = Rewards/backlog. Pass as `priority: "p2"` etc.
+p1 = reserved (formerly Anchor Chain — now calendar-only). p2 = thread tasks (Family/Wildtide/Upwork/Community — current roadmap priorities). p3 = learning + personal admin. p4 = backlog. Pass as `priority: "p2"` etc.
 
 ## Daily Habits — Calendar-Only
 
@@ -79,21 +97,23 @@ Pre-built filters alfred can use via `find-tasks` with `filterIdOrName`:
 | Filter | Intent | Use |
 |--------|--------|-----|
 | 🎯 Big Tasks | `@prove` — all prove goals | Daily focus selection |
-| 🏆 Milestones | Milestones section tasks | Roadmap checkpoint awareness |
 | ⏰ Overdue | Overdue tasks | Safety net |
 
 Energy-based filters removed (Deep Work Today, Medium Energy Today, Low Energy). Alfred can still query by label directly: `find-tasks` with `labels: ["high_energy"]`.
 
 **Deleted labels:** chain_english, life, course
-**Active labels:** high_energy, low_energy, medium_energy, creative, english, prove
+**Active labels:**
+- Energy: high_energy, low_energy, medium_energy
+- Topic: creative, english, prove
+- People: sa, duyen, hai
+- Care ops: visit, consult, vaccine, equipment, followup, health
 
 ### Filter Syntax Quick Reference
 
 | Syntax | Meaning | Example |
 |--------|---------|---------|
-| `#Project` | Project only | `#⚔️ Main Quests` |
-| `##Project` | Project + sub-projects | `##⚔️ Main Quests` |
-| `/Section` | Section within any project | `/🏆 Milestones` |
+| `#Project` | Project only | `#🎮 Wildtide` |
+| `##Project` | Project + sub-projects | `##📚 Learning Queue` |
 | `@label` | Label | `@high_energy` |
 
-**Common mistake:** `##🏆 Milestones` = project named "🏆 Milestones" (wrong). `/🏆 Milestones` = section (correct).
+Projects are now flat (no sections). Use `#ProjectName` for project filtering.

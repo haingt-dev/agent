@@ -61,12 +61,11 @@ Science notes:
 
 ```
 ### Tasks Created
-| Task | Project / Section | Priority | Labels | Duration | Deadline | Phase | Materialized |
-|------|-------------------|----------|--------|----------|----------|-------|-------------|
-| build portfolio site | Main / 💰 Income | p2 | high_energy | 90m | — | prove | ⏰ PEAK (open-ended) |
-| run IPA pipeline | Main / 🧠 Growth | p2 | medium_energy | 45m | — | execute | ⏰ 14:00-14:45 |
-| mua sữa cho vợ | Side / 🏠 Life | p3 | low_energy | 30m | — | execute | — |
-| Apr 30 check | Main / 🏆 Milestones | p2 | high_energy | 45m | ⚠️ 04/30 | execute | ⏰ 09:00-09:45 |
+| Task | Project | Priority | Labels | Duration | Deadline | Phase | Materialized |
+|------|---------|----------|--------|----------|----------|-------|-------------|
+| build Upwork case study | 💼 Upwork | p2 | high_energy | 90m | — | prove | ⏰ PEAK (open-ended) |
+| ELSA practice | 📚 Learning Queue | p3 | low_energy, english | 30m | — | execute | ⏰ 07:20-07:40 |
+| mua sữa cho vợ | 🏠 Personal | p3 | low_energy | 30m | — | execute | — |
 ```
 
 ## Weekly Review Format (Mode 5)
@@ -77,16 +76,17 @@ Science notes:
 
 ### ✅ Completed ({count})
 
-**⚔️ Main Quests**
-- [x] Task name (💰 Income) — {completion_date}
-- [x] Task name (🧠 Growth) — {completion_date}
-
-**🎮 Side Quests**
-- [x] Task name (🏠 Life) — {completion_date}
+Grouped by project:
+- [x] Task name (🎮 Wildtide) — {completion_date}
+- [x] Task name (💼 Upwork) — {completion_date}
+- [x] Task name (👥 Community) — {completion_date}
+- [x] Task name (📚 Learning Queue) — {completion_date}
+- [x] Task name (👨‍👩‍👧 Family) — {completion_date}
+- [x] Task name (🏠 Personal) — {completion_date}
 
 ### ➡️ Carried Over ({count})
-- [ ] Task name (💰 Income) — due {date}
-- [ ] Task name (🧠 Growth) — due {date}
+- [ ] Task name (🎮 Wildtide) — due {date}
+- [ ] Task name (💼 Upwork) — due {date}
 ```
 
 ### Note Review Section (written to file via obsidian patch)
@@ -94,12 +94,12 @@ Science notes:
 ## 📊 Review
 
 ### ✅ Completed ({X})
-- [x] Task name (💰 Income) — {date}
-- [x] Task name (🧠 Growth) — {date}
+- [x] Task name (🎮 Wildtide) — {date}
+- [x] Task name (💼 Upwork) — {date}
 
 ### ➡️ Carried Over ({Y})
-- [ ] Task name (💰 Income) — due {date}
-- [ ] Task name (🧠 Growth) — due {date}
+- [ ] Task name (🎮 Wildtide) — due {date}
+- [ ] Task name (💼 Upwork) — due {date}
 ```
 
 ### Summary

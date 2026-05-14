@@ -139,7 +139,9 @@ def test_strip_viet_basic():
 def test_strip_viet_fuzzy_match():
     """Wrong diacritics should match after stripping."""
     assert strip_viet("mệt mổi") == strip_viet("mệt mỏi")
-    assert strip_viet("đám cuối") != strip_viet("đám cưới")  # different base words
+    # Note: strip_viet is intentionally aggressive — horn marks collapse too
+    # (ư→u, ơ→o per docstring), so "cuối" and "cưới" both → "cuoi".
+    # Different-base-word collisions are an accepted fuzzy-match tradeoff.
 
 
 def test_strip_viet_ascii_passthrough():

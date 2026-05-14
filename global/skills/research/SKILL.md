@@ -142,8 +142,8 @@ Organize raw findings into:
 Apply these filters to the synthesized findings. This is what makes the research non-generic:
 
 1. **Career Anchors**: Does this align with Autonomy/Independence, Entrepreneurial Creativity, Lifestyle? If it conflicts → flag (don't silently drop — Hai should see the conflict)
-2. **Active Brick**: Does this serve the current Prove slot? Or is it a distraction?
-3. **Phase Capacity**: Is this feasible at current capacity? A 200-hour migration during Phase 1 (40% capacity, newborn) is a non-starter
+2. **Active Threads**: Does this serve one of 5 current threads (Sa, Wildtide, Upwork, Community, English)? Or is it a distraction?
+3. **Current Capacity**: Is this feasible at current capacity? A 200-hour migration during ở cữ period (30-40% capacity, baby) is a non-starter
 4. **Ecosystem Coherence**: Does this serve the indie game dev infrastructure thesis? Or is it a tangent?
 5. **Financial Viability**: Does this require spend that the survival budget can't absorb?
 
