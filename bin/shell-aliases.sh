@@ -82,7 +82,7 @@ mb-status() {
 # ============================================
 
 # Claude CLI shortcuts
-alias c='claude --allow-dangerously-skip-permissions'  # 4 modes: default → acceptEdits → plan → bypassPermissions
+alias c='claude --permission-mode auto'  # auto mode: classifier-gated (safe actions run, risky ones prompt)
 
 # Show agent priority
 alias ag-priority='echo "🎯 Agent: Claude Code (c)"'
