@@ -419,7 +419,7 @@ class TestP4SessionAutoConsolidation:
     """Test that session save triggers auto-consolidation when appropriate."""
 
     def test_session_save_triggers_consolidation(self):
-        """Saving a session with 3+ memories should trigger cluster check."""
+        """Saving a session with 4+ memories should trigger cluster check."""
         conn = _create_test_db()
 
         # Insert a session
@@ -431,17 +431,17 @@ class TestP4SessionAutoConsolidation:
         with patch("haingt_brain.consolidate.cluster_and_synthesize") as mock_cluster:
             mock_cluster.return_value = {"synthesized": 0, "details": []}
 
-            # Save with 3+ items — should trigger consolidation check
+            # Save with 4+ items — should trigger consolidation check
             result = brain_session_save(
                 conn, "sess1", "Test session summary",
-                decisions=["Decision A", "Decision B", "Decision C"],
+                decisions=["Decision A", "Decision B", "Decision C", "Decision D"],
             )
 
         # cluster_and_synthesize should have been called
         mock_cluster.assert_called_once()
 
     def test_session_save_skips_for_few_memories(self):
-        """Saving a session with <3 memories should NOT trigger consolidation."""
+        """Saving a session with <4 memories should NOT trigger consolidation."""
         conn = _create_test_db()
 
         conn.execute("INSERT INTO sessions (id, project) VALUES ('sess2', 'test')")
@@ -456,3 +456,151 @@ class TestP4SessionAutoConsolidation:
             )
 
         mock_cluster.assert_not_called()
+
+
+# ── Regression: Consolidation Idempotence ────────────────────────────
+
+
+class TestConsolidationIdempotence:
+    """Locks in the fix for the synthesis feedback loop.
+
+    Without exclusion of prior synthesis nodes from the candidate query,
+    each consolidation run reads its own previous output and re-synthesizes,
+    creating near-identical duplicates.
+    """
+
+    def test_idempotent_no_resynthesis(self):
+        """Running cluster_and_synthesize twice in a row produces 0 syntheses on the second pass."""
+        conn = _create_test_db()
+
+        # 4 similar memories — large enough to cluster on first run
+        for i in range(4):
+            _insert_memory_with_vec(
+                conn, f"loop_{i}",
+                f"Decision about consolidation behavior #{i}",
+                "decision", embedding_seed=42,
+                source="manual", created_days_ago=10,
+            )
+
+        from haingt_brain.consolidate import cluster_and_synthesize
+
+        with patch("haingt_brain.consolidate._synthesize_cluster") as mock_synth:
+            mock_synth.return_value = "Synthesized: consolidation behavior pattern"
+
+            r1 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65)
+            assert r1["synthesized"] >= 1, "First run should synthesize at least one cluster"
+            first_call_count = mock_synth.call_count
+
+            r2 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65)
+
+        assert r2["synthesized"] == 0, (
+            f"Second run must not re-synthesize (got {r2['synthesized']}). "
+            f"Loop bug is back."
+        )
+        assert mock_synth.call_count == first_call_count, (
+            "_synthesize_cluster must not be called again on idempotent re-run"
+        )
+
+        conn.close()
+
+    # The exact WHERE clause used by cluster_and_synthesize — kept here so
+    # the regression tests fail loudly if the production query drifts apart
+    # from what we believe is the correct exclusion.
+    CANDIDATE_QUERY = """
+        SELECT id FROM memories
+        WHERE type NOT IN ('tool', 'preference', 'session')
+          AND created_at < datetime('now', '-7 days')
+          AND COALESCE(json_extract(metadata, '$.source'), '') != 'consolidation'
+          AND id NOT IN (
+            SELECT source_id FROM relations WHERE relation_type = 'part_of'
+            UNION
+            SELECT target_id FROM relations WHERE relation_type = 'part_of'
+          )
+    """
+
+    def test_synthesis_excluded_from_candidates(self):
+        """The candidate query must exclude rows with metadata.source='consolidation'."""
+        conn = _create_test_db()
+
+        # Insert a "synthesized" memory directly
+        _insert_memory_with_vec(
+            conn, "synth_1",
+            "Synthesized abstraction",
+            "decision", embedding_seed=999,
+            source="consolidation", created_days_ago=10,
+        )
+        # Insert a normal memory for comparison
+        _insert_memory_with_vec(
+            conn, "normal_1",
+            "Regular decision",
+            "decision", embedding_seed=1000,
+            source="manual", created_days_ago=10,
+        )
+
+        rows = conn.execute(self.CANDIDATE_QUERY).fetchall()
+        ids = {r["id"] for r in rows}
+
+        assert "synth_1" not in ids, "Consolidation-source row must be excluded"
+        assert "normal_1" in ids, "Regular row must remain a candidate"
+
+        conn.close()
+
+    def test_part_of_endpoints_excluded(self):
+        """Both ends of a part_of relation must be excluded as seeds.
+
+        target_id = synthesis (would re-feed the loop on its own).
+        source_id = original already folded into a synthesis (would cluster
+        with its peers again on the next run, producing a duplicate
+        synthesis with the same content).
+        """
+        conn = _create_test_db()
+
+        _insert_memory_with_vec(
+            conn, "target_synth", "Target of a part_of relation",
+            "decision", embedding_seed=1, source="manual", created_days_ago=10,
+        )
+        _insert_memory_with_vec(
+            conn, "source_orig", "Original referenced by relation",
+            "decision", embedding_seed=2, source="manual", created_days_ago=10,
+        )
+        # source_orig is part_of target_synth (matches consolidate.py:573 wiring)
+        conn.execute(
+            "INSERT INTO relations (source_id, target_id, relation_type) VALUES (?, ?, 'part_of')",
+            ("source_orig", "target_synth"),
+        )
+        conn.commit()
+
+        rows = conn.execute(self.CANDIDATE_QUERY).fetchall()
+        ids = {r["id"] for r in rows}
+
+        assert "target_synth" not in ids, "part_of target (synthesis) must be excluded"
+        assert "source_orig" not in ids, (
+            "part_of source (already-clustered original) must also be excluded "
+            "to prevent re-clustering with its peers"
+        )
+
+        conn.close()
+
+    def test_session_save_skipped_when_already_ended(self):
+        """Re-saving an already-ended session must not re-trigger cluster_and_synthesize."""
+        conn = _create_test_db()
+
+        # Insert a session that's already been ended
+        conn.execute(
+            "INSERT INTO sessions (id, project, ended_at) VALUES ('sess_done', 'test', datetime('now', '-1 hour'))"
+        )
+        conn.commit()
+
+        from haingt_brain.tools.session import brain_session_save
+
+        with patch("haingt_brain.consolidate.cluster_and_synthesize") as mock_cluster:
+            mock_cluster.return_value = {"synthesized": 0, "details": []}
+
+            brain_session_save(
+                conn, "sess_done", "Re-save attempt",
+                decisions=["A", "B", "C", "D"],
+            )
+
+        mock_cluster.assert_not_called()
+
+        conn.close()

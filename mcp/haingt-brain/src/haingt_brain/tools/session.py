@@ -137,6 +137,14 @@ def brain_session_save(
             (session_id, proj),
         )
 
+    # Capture prior ended_at BEFORE the UPDATE below — used as idempotence
+    # guard for session-end auto-consolidation. If this is a re-save of an
+    # already-ended session, we skip the cluster step.
+    prior_row = conn.execute(
+        "SELECT ended_at FROM sessions WHERE id = ?", (session_id,)
+    ).fetchone()
+    was_already_ended = bool(prior_row and prior_row["ended_at"])
+
     memory_ids = []
 
     # Save individual items as memories (with source attribution for importance)
@@ -176,13 +184,16 @@ def brain_session_save(
         except Exception:
             pass
 
-    # P4: Session-end auto-consolidation — if this session created 3+ memories
-    # on similar topics, offer to consolidate them into a summary
+    # P4: Session-end auto-consolidation — if this session created enough
+    # similar memories, summarize them. Two guards:
+    # (a) idempotence — skip if the session already ended once (re-save).
+    # (b) tighter thresholds (min_cluster=4, sim_threshold=0.78) so a single
+    #     session's small sample doesn't spawn spurious abstractions.
     auto_consolidated = 0
-    if len(memory_ids) >= 3:
+    if not was_already_ended and len(memory_ids) >= 4:
         try:
             from ..consolidate import cluster_and_synthesize
-            r = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.70)
+            r = cluster_and_synthesize(conn, min_cluster=4, sim_threshold=0.78)
             auto_consolidated = r.get("synthesized", 0)
             if auto_consolidated > 0:
                 suggestions.append(

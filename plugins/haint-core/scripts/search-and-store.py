@@ -44,7 +44,10 @@ def _distill_to_facts(raw_content: str, tool_type: str) -> str:
     raw search/fetch output. Each fact is context-independent (no pronouns,
     no "the above", dates resolved to absolute).
 
-    Falls back to truncated raw content if LLM call fails.
+    Returns "" (skip save) on any failure: missing API key, network error,
+    LLM exception, SKIP signal, or too-short output. Storing raw HTTP
+    dumps as discoveries pollutes recall — better to lose the auto-capture
+    than to keep noise. The user can always brain_save manually.
     """
     try:
         import openai
@@ -52,7 +55,7 @@ def _distill_to_facts(raw_content: str, tool_type: str) -> str:
 
         client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         if not client.api_key:
-            return raw_content[:MAX_TOTAL_CHARS]
+            return ""  # No API key → skip save (no raw dump)
 
         response = client.chat.completions.create(
             model="gpt-4.1-nano",
@@ -76,7 +79,7 @@ Content:
             return ""  # Signal to skip saving entirely
         return facts
     except Exception:
-        return raw_content[:MAX_TOTAL_CHARS]  # Fallback: raw truncated
+        return ""  # LLM failure → skip save (no raw dump)
 
 
 def extract_search_content(data: dict) -> tuple[str, str] | None:

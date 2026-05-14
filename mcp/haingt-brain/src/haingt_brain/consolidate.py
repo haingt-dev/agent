@@ -476,12 +476,23 @@ def cluster_and_synthesize(
     """
     result = {"synthesized": 0, "details": []}
 
-    # Find candidate memories (old enough, non-system types)
+    # Find candidate memories (old enough, non-system types).
+    # Exclude anything that has already participated in a synthesis — both
+    # synthesis nodes themselves (target_id of part_of) AND originals that
+    # have already been folded into one (source_id of part_of). Without
+    # this guard, each run reads its own output AND/OR the same originals,
+    # re-synthesizing indefinitely.
     rows = conn.execute("""
         SELECT id, content, type, tags, project, importance, created_at
         FROM memories
         WHERE type NOT IN ('tool', 'preference', 'session')
           AND created_at < datetime('now', '-7 days')
+          AND COALESCE(json_extract(metadata, '$.source'), '') != 'consolidation'
+          AND id NOT IN (
+            SELECT source_id FROM relations WHERE relation_type = 'part_of'
+            UNION
+            SELECT target_id FROM relations WHERE relation_type = 'part_of'
+          )
         ORDER BY project, type, created_at
     """).fetchall()
 

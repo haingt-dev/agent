@@ -330,11 +330,12 @@ Five strategies, all in `consolidate.py`:
 - LLM synthesizes cluster into one abstract memory (via gpt-4.1-nano)
 - Originals get `part_of` relation to synthesis, importance halved
 - Only processes memories >7 days old. Max 3 clusters per run (LLM cost control)
+- **Idempotence guard**: candidate query excludes anything already involved in a synthesis — both `target_id` (the synthesis itself) AND `source_id` (originals already folded in). Without this, each run reads its own output and re-synthesizes indefinitely.
 
 ### Auto-trigger
 - `brain_session("start")` checks `brain_meta.last_consolidation`
 - If >3 days since last run → `consolidate_all()` automatically
-- `brain_session("save")` triggers `cluster_and_synthesize` if 3+ memories created
+- `brain_session("save")` triggers `cluster_and_synthesize` if 4+ memories created AND the session was not previously ended (idempotence guard for re-saves). Uses tighter `min_cluster=4, sim_threshold=0.78` than the global default to avoid spurious abstractions from a small single-session sample.
 - Timestamp recorded in `brain_meta` after each run
 
 ### Session-Count Gate
@@ -520,7 +521,7 @@ Context approaching limit → /compact triggered
 | `scripts/brain-context.py` | Direct SQLite read → decisions, preferences, last session |
 | `scripts/prompt-context.py` | Per-prompt hybrid RRF + Semantic Toolbox, dedup, token caps |
 | `scripts/post-tool-use.sh` | PostToolUse router → search-and-store.py |
-| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results — entropy filter + LLM distillation |
+| `scripts/search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results — entropy filter + LLM distillation. Skips save entirely if no `OPENAI_API_KEY` or LLM call fails (better to lose auto-capture than store raw HTTP dumps). |
 | `scripts/pre-compact.sh` | PreCompact router → pre-compact-snapshot.py |
 | `scripts/pre-compact-snapshot.py` | 4-category structured extraction → brain.db + cache reset |
 | `scripts/entity-extract.py` | Stop hook: regex entity extraction → brain.db type=entity |
