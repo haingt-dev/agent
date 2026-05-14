@@ -253,6 +253,22 @@ def brain_session_status(conn: sqlite3.Connection) -> dict:
     except Exception:
         importance_tiers = None
 
+    # Consolidation loop guard — surface early if loop resumes after the fix
+    try:
+        loop_count = conn.execute("""
+            SELECT COUNT(*) FROM memories
+            WHERE json_extract(metadata, '$.source') = 'consolidation'
+              AND created_at >= datetime('now', '-7 days')
+        """).fetchone()[0]
+        if loop_count > 10:
+            loop_risk = f"HIGH ({loop_count} consolidation-sourced memories in last 7d — run audit)"
+        elif loop_count > 0:
+            loop_risk = None  # Low count is normal (legitimate synthesis)
+        else:
+            loop_risk = None
+    except Exception:
+        loop_risk = None
+
     result = {
         "total_memories": total,
         "by_type": {r["type"]: r["count"] for r in type_counts},
@@ -262,4 +278,6 @@ def brain_session_status(conn: sqlite3.Connection) -> dict:
     }
     if importance_tiers:
         result["importance_tiers"] = importance_tiers
+    if loop_risk:
+        result["loop_risk"] = loop_risk
     return result

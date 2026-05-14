@@ -42,11 +42,18 @@
     }],
     "Stop": [{
       "matcher": "",
-      "hooks": [{
-        "type": "command",
-        "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/entity-extract.py",
-        "timeout": 15
-      }]
+      "hooks": [
+        {
+          "type": "command",
+          "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/entity-extract.py",
+          "timeout": 15
+        },
+        {
+          "type": "command",
+          "command": "/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3 ${CLAUDE_PLUGIN_ROOT}/scripts/stop-saveable.py",
+          "timeout": 10
+        }
+      ]
     }]
   }
 }
