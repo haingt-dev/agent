@@ -3,14 +3,13 @@
 # Usage: bootstrap-project.sh /path/to/new/project [project-name]
 #
 # Creates:
-#   .memory-bank/       — Project knowledge
 #   .claude/             — Claude Code config + rules + hooks
+# Project context lives in .claude/CLAUDE.md (stable) + haingt-brain (dynamic).
 
 set -e
 
 PROJECT_PATH="${1:-.}"
 PROJECT_NAME="${2:-$(basename "$PROJECT_PATH")}"
-TEMPLATES="$HOME/Projects/agent/templates"
 
 echo "🚀 Bootstrapping project: $PROJECT_NAME"
 echo "📁 Location: $PROJECT_PATH"
@@ -23,38 +22,9 @@ if [ ! -d "$PROJECT_PATH" ]; then
 fi
 
 # ============================================
-# 1. MEMORY BANK (brief.md only — lightweight project identity)
-# ============================================
-MEMORY_BANK="$PROJECT_PATH/.memory-bank"
-echo "📝 Creating .memory-bank/..."
-mkdir -p "$MEMORY_BANK"
-
-if [ ! -f "$MEMORY_BANK/brief.md" ]; then
-    if [ -f "$TEMPLATES/memory-bank/brief.md" ]; then
-        cp "$TEMPLATES/memory-bank/brief.md" "$MEMORY_BANK/"
-    else
-        cat > "$MEMORY_BANK/brief.md" << BRIEF_EOF
-# Project Brief: $PROJECT_NAME
-
-<!-- What is this project? Why does it exist? What problem does it solve? -->
-
-## Goals
-<!-- Key objectives -->
-
-## Key Context
-<!-- Important constraints, integrations, or decisions -->
-BRIEF_EOF
-    fi
-    echo "  ✓ brief.md"
-else
-    echo "  ⏭ brief.md (exists)"
-fi
-
-# ============================================
-# 2. CLAUDE CONFIG
+# 1. CLAUDE CONFIG
 # ============================================
 CLAUDE_DIR="$PROJECT_PATH/.claude"
-echo ""
 echo "🤖 Creating .claude/..."
 mkdir -p "$CLAUDE_DIR/rules"
 
@@ -63,13 +33,13 @@ if [ ! -f "$CLAUDE_DIR/CLAUDE.md" ]; then
 # Claude Code — $PROJECT_NAME
 
 ## What Is This
-<!-- 2-3 sentences: purpose, stack, goal. -->
+<!-- 2-3 sentences: purpose, stack, goal. This is the stable project anchor. -->
 
 ## Values
 <!-- Project-specific working principles. Delete if none. -->
 
 ## Context Sources
-- \`.memory-bank/brief.md\` — compact anchor (identity + current focus)
+- This file (\`CLAUDE.md\`) — project identity, scope, conventions (stable anchor)
 - **haingt-brain** — dynamic context (\`brain_recall\` at session start, \`brain_save\` after major work)
 
 ## Rules
@@ -93,7 +63,7 @@ else
 fi
 
 # ============================================
-# 3. REGISTER IN HUB
+# 2. REGISTER IN HUB
 # ============================================
 REGISTRY="$HOME/Projects/agent/registry.json"
 if [ -f "$REGISTRY" ] && command -v jq &>/dev/null; then
@@ -134,22 +104,20 @@ else
 fi
 
 # ============================================
-# 4. SUMMARY
+# 3. SUMMARY
 # ============================================
 echo ""
 echo "✅ Bootstrap complete!"
 echo ""
 echo "📂 Structure:"
 echo "   $PROJECT_PATH/"
-echo "   ├── .memory-bank/"
-echo "   │   └── brief.md           (project identity — auto-loaded at session start)"
-echo "   ├── .claude/"
-echo "   │   ├── CLAUDE.md          (project instructions + rules)"
-echo "   │   ├── settings.json      (project-specific settings)"
-echo "   │   └── skills/            (add SKILL.md per workflow)"
+echo "   └── .claude/"
+echo "       ├── CLAUDE.md          (project identity + instructions + rules)"
+echo "       ├── settings.json      (project-specific settings)"
+echo "       └── skills/            (add SKILL.md per workflow)"
 echo ""
 echo "📝 Next steps:"
-echo "   1. Fill in .memory-bank/ files with project details"
+echo "   1. Fill in .claude/CLAUDE.md (What Is This + project-specific rules)"
 echo "   2. Add skills in .claude/skills/<name>/SKILL.md for project workflows"
 echo "   3. Install core plugin: claude plugin install haint-core@haint-marketplace --scope user"
 echo "   4. (Godot projects) Install: claude plugin install godot-dev@haint-marketplace --scope project"

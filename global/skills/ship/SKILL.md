@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Lint, test, review, update Memory Bank, and commit — one command to ship changes."
+description: "Lint, test, review, and commit — one command to ship changes."
 argument-hint: "[commit-message]"
 disable-model-invocation: false
 allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest *), Bash(make *), Bash(gdformat *), Bash(gdlint *), Bash(ruff *), Read, Grep, Glob, Write, Edit
@@ -8,7 +8,7 @@ allowed-tools: Bash(git *), Bash(bun *), Bash(npm *), Bash(cargo *), Bash(pytest
 
 # Ship
 
-Pre-flight → Lint/Format → Test → Review → Memory Bank → Docs → Commit.
+Pre-flight → Lint/Format → Test → Review → Docs → Commit.
 
 ## Usage
 
@@ -155,23 +155,7 @@ If nothing found: "LGTM — no issues found in [N files, M lines changed]."
 
 **STOP if any Critical issues found.** Warnings are reported but don't block.
 
-## Step 5: Memory Bank
-
-If `.memory-bank/` exists in the project:
-
-**Stale check first:** Run `git status .memory-bank/`. If uncommitted changes exist from a previous session, commit them as `docs: update memory bank` before proceeding.
-
-Then:
-1. Read current `.memory-bank/context.md`
-2. Review what changed this session via `git diff` and `git log`
-3. Update `context.md` with current focus, recent changes, active workstreams
-4. If architecture changed → also update `architecture.md`
-5. If tech stack changed → also update `tech.md`
-6. If tasks changed → also update `task.md`
-
-**Skip this step** if the changes are trivial (typos, formatting-only, config tweaks that don't affect context).
-
-## Step 6: Docs
+## Step 5: Docs
 
 Check if code changes affect project documentation.
 
@@ -186,20 +170,17 @@ Process:
 
 Include doc updates in the main code commit (not a separate commit).
 
-## Step 7: Commit
+## Step 6: Commit
 
 1. Check `git log --oneline -5` for existing commit style
-2. Stage all relevant code changes (exclude `.memory-bank/`)
+2. Stage all relevant code changes
 3. Never commit files containing secrets (`.env`, credentials)
 4. Never push to remote — only local commits
 5. Create commit:
    - Use `$ARGUMENTS` if provided (already validated in Step 1)
    - Otherwise generate conventional commit message (`type(scope): description`) matching project style
-6. If Memory Bank was updated in Step 5:
-   - Stage `.memory-bank/` files
-   - Create a separate commit: `docs: update memory bank`
 
-## Step 7.5: Post-Commit Brain Save
+## Step 6.5: Post-Commit Brain Save
 
 Save to brain only when one of these conditions is true:
 
@@ -231,6 +212,5 @@ Do NOT save: info-level findings, linting results, things handled by pre-commit 
 ## Shipped
 - Commit: `abc1234` feat(auth): add JWT support
 - Files: 5 changed (+120, -30)
-- Memory Bank: updated / skipped
 - Review: LGTM / N warnings
 ```

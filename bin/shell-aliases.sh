@@ -30,53 +30,6 @@ alias dic='cd ~/Projects/digital-identity && claude --continue'
 # Bootstrap new project
 alias bootstrap='~/Projects/agent/bin/bootstrap-project.sh'
 
-# Edit Memory Bank in current project
-mbk() {
-    if [ -d ".memory-bank" ]; then
-        echo "📝 Opening Memory Bank..."
-        $EDITOR .memory-bank/
-    else
-        echo "❌ No Memory Bank found in current directory"
-        echo "💡 Run 'bootstrap .' to create one"
-    fi
-}
-
-# Quick edit task.md
-mbt() {
-    if [ -f ".memory-bank/task.md" ]; then
-        $EDITOR .memory-bank/task.md
-    else
-        echo "❌ No task.md found. Run 'mbk' to see all Memory Bank files"
-    fi
-}
-
-# Quick edit context.md (most frequently updated)
-mbc() {
-    if [ -f ".memory-bank/context.md" ]; then
-        $EDITOR .memory-bank/context.md
-    else
-        echo "❌ No context.md found. Run 'mbk' to see all Memory Bank files"
-    fi
-}
-
-# View Memory Bank status
-mb-status() {
-    if [ -d ".memory-bank" ]; then
-        echo "📊 Memory Bank Status"
-        echo "===================="
-        for file in .memory-bank/*.md; do
-            if [ -f "$file" ]; then
-                filename=$(basename "$file")
-                size=$(wc -l < "$file")
-                modified=$(stat -c %y "$file" 2>/dev/null || stat -f "%Sm" "$file" 2>/dev/null)
-                printf "%-20s | %4d lines | %s\n" "$filename" "$size" "${modified:0:16}"
-            fi
-        done
-    else
-        echo "❌ No Memory Bank in current directory"
-    fi
-}
-
 # ============================================
 # AGENT SWITCHING
 # ============================================
@@ -101,12 +54,6 @@ cdc() {
         cd "$PROJECT_PATH"
         echo "📂 Switched to: $PROJECT_PATH"
 
-        # Show Memory Bank status if exists
-        if [ -d ".memory-bank" ]; then
-            echo ""
-            mb-status
-        fi
-
         # Offer to start Claude
         echo ""
         echo "💡 Start Claude? (c)"
@@ -127,7 +74,6 @@ ag-status() {
         echo ""
         echo "--- $name ---"
         [ -f "$project/AGENTS.md" ] && echo "  ✓ AGENTS.md" || echo "  ✗ AGENTS.md"
-        [ -d "$project/.memory-bank" ] && echo "  ✓ .memory-bank/" || echo "  ✗ .memory-bank/"
         [ -f "$project/.claude/CLAUDE.md" ] && echo "  ✓ .claude/" || echo "  ✗ .claude/"
     done
 }
@@ -150,16 +96,10 @@ ag-help() {
   cdv             → Go to Obsidian Vault
   di              → Go to Digital Identity
   dic             → Go to Digital Identity + resume Claude session
-  cdc <project>   → Switch to project + show Memory Bank
-
-📝 MEMORY BANK
-  mbk             → Edit Memory Bank (current project)
-  mbc             → Edit context.md (quick access)
-  mbt             → Edit task.md (quick access)
-  mb-status       → Show Memory Bank file status
+  cdc <project>   → Switch to project
 
 🚀 PROJECT MANAGEMENT
-  bootstrap <dir> → Bootstrap new project with Memory Bank
+  bootstrap <dir> → Bootstrap new project
 
 🤖 AGENTS
   c               → Start Claude

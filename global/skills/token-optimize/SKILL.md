@@ -50,7 +50,7 @@ Work through these 5 phases in order. Use Read, Glob, and Grep tools only — ne
 
 Scan every context source. For each file: path, line count, char count, estimated tokens (chars / 3.5).
 
-Categories: **always-on** (global CLAUDE.md, project CLAUDE.md, AGENTS.md, auto-memory MEMORY.md, memory-bank .md files, brain files, skill descriptions frontmatter, plugin skills), **dynamic** (hook-injected context from SessionStart scripts — estimated, not statically measurable), **on-demand** (.claude/rules/*.md, skill bodies), **settings** (settings.json, settings.local.json, .mcp.json, .claudeignore).
+Categories: **always-on** (global CLAUDE.md, project CLAUDE.md, AGENTS.md, auto-memory MEMORY.md, brain files, skill descriptions frontmatter, plugin skills), **dynamic** (hook-injected context from SessionStart scripts — estimated, not statically measurable), **on-demand** (.claude/rules/*.md, skill bodies), **settings** (settings.json, settings.local.json, .mcp.json, .claudeignore).
 
 Critical: resolve all `@import` directives in CLAUDE.md files — grep for `^@` lines, read each target file, record expanded size. Use expanded size for all benchmarks. Show imports as indented sub-rows in the Context Breakdown table.
 

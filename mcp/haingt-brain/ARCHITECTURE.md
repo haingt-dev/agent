@@ -238,7 +238,7 @@ ORDER BY s.rrf_score DESC LIMIT :k
 
 ### SessionStart → `session-start.sh` + `brain-context.py`
 - **Trigger**: Every session start, resume, or post-compact
-- **Output**: Git branch + recent commits + memory-bank brief + brain context
+- **Output**: Git branch + recent commits + brain context
 - **brain-context.py**: Direct SQLite read → recent decisions (3, 7 days), preferences (3), last session summary (1)
 - **Memory Staleness Warnings**: Memories older than 2 days get an `(Nd ago)` suffix appended to their content in the injected context (e.g. `(5d ago)`). Gives Claude immediate recency signal without extra tokens.
 - **Target**: ~300-500 tokens injected
@@ -517,7 +517,7 @@ Context approaching limit → /compact triggered
 | File | Purpose |
 |------|---------|
 | `hooks/hooks.json` | Hook configuration (6 events, matchers, timeouts) |
-| `scripts/session-start.sh` | SessionStart: git + memory-bank + brain-context.py |
+| `scripts/session-start.sh` | SessionStart: git + brain-context.py |
 | `scripts/brain-context.py` | Direct SQLite read → decisions, preferences, last session |
 | `scripts/prompt-context.py` | Per-prompt hybrid RRF + Semantic Toolbox, dedup, token caps |
 | `scripts/post-tool-use.sh` | PostToolUse router → search-and-store.py |

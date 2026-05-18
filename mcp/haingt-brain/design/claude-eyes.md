@@ -88,7 +88,7 @@ Recent: po-shen-loh, parallel-channels, character-legibility
 brain: ok | todoist: ok | gcal: ok | readwise: ok
 
 ## Graph (top connections)
-roadmap.md → goals.md, career.md, core-memory.md, brief.md
+roadmap.md → goals.md, career.md, core-memory.md
 goals.md → roadmap.md, career.md
 beliefs.md → identity.md
 ```
@@ -174,7 +174,6 @@ Not all references are equal. Some files are **sources of truth**, others **deri
 ```
 roadmap.md (source) → goals.md (derives summary)
 roadmap.md (source) → core-memory.md (derives compressed version)
-roadmap.md (source) → brief.md (derives overview)
 career.md (source) → cv/Profile.tex (derives formatted output)
 profile/* (source) → derived/* (auto-generated)
 ```
@@ -187,7 +186,6 @@ When Claude edits a source-of-truth file, radar should surface:
 ⚠ Editing roadmap.md — downstream files:
   goals.md (Roadmap section, L67-83)
   core-memory.md (Ecosystem line)
-  brief.md (Roadmap section)
   mentor/SKILL.md (cross-reference rules)
 ```
 

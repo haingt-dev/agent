@@ -14,11 +14,10 @@ For each file, record: path, line count, char count, estimated tokens (chars / 3
 2. Project CLAUDE.md — Check both `.claude/CLAUDE.md` and root `CLAUDE.md`. Also resolve `@import` directives.
 3. `AGENTS.md` — If exists at project root.
 4. Auto-memory — Find the project's memory directory under `~/.claude/projects/` with the path derived from the working directory (replace `/` with `-`, strip leading `-`). Read `MEMORY.md`.
-5. Memory bank — Glob `.memory-bank/*.md` at project root. These load if a startup hook reads them — check `.claude/settings.json` and `.claude/settings.local.json` for `SessionStart` hooks.
-6. Brain files — Glob `~/.claude/brains/*.md`. For each: path, lines, chars, tokens. Note which project CLAUDE.md files @import each brain file (grep for `@~/.claude/brains/` across all CLAUDE.md files). These are always-on for every project that @imports them.
-7. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills. Note: with brain_tools Semantic Toolbox, descriptions can be minimal labels (~20-50 chars) — verbose descriptions are waste.
-8. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. Each enabled plugin contributes skill descriptions to always-on context. Scan plugin skill paths: `~/Projects/agent/plugins/*/skills/*/SKILL.md`.
-9. Hook dynamic context (estimated) — Two layers: (a) SessionStart (brain-context.py): read script to check pattern. L0+L1 hard-cap = ~50 tok. Pre-L0/L1 pattern (injects recent decisions + preferences) = ~300-500 tok. (b) UserPromptSubmit (prompt-context.py): check for trivial-prompt gate and toolbox removal — see 3i.2 in Phase 3. Category: "dynamic (estimated)" — not statically measurable but impacts token budget per session/prompt.
+5. Brain files — Glob `~/.claude/brains/*.md`. For each: path, lines, chars, tokens. Note which project CLAUDE.md files @import each brain file (grep for `@~/.claude/brains/` across all CLAUDE.md files). These are always-on for every project that @imports them.
+6. Skill descriptions — Glob `.claude/skills/*/SKILL.md`. Read only the YAML frontmatter (between `---` markers). Extract the `description` field and measure its length. Count total skills. Note: with brain_tools Semantic Toolbox, descriptions can be minimal labels (~20-50 chars) — verbose descriptions are waste.
+7. Plugin skills — Check `enabledPlugins` in `~/.claude/settings.json`. Each enabled plugin contributes skill descriptions to always-on context. Scan plugin skill paths: `~/Projects/agent/plugins/*/skills/*/SKILL.md`.
+8. Hook dynamic context (estimated) — Two layers: (a) SessionStart (brain-context.py): read script to check pattern. L0+L1 hard-cap = ~50 tok. Pre-L0/L1 pattern (injects recent decisions + preferences) = ~300-500 tok. (b) UserPromptSubmit (prompt-context.py): check for trivial-prompt gate and toolbox removal — see 3i.2 in Phase 3. Category: "dynamic (estimated)" — not statically measurable but impacts token budget per session/prompt.
 
 ### Resolving `@import` directives
 
@@ -86,7 +85,7 @@ Issues are classified into three tiers:
 Read the content of all always-on files (including @import-expanded content). Look for the same information appearing in multiple places:
 - Pipeline commands in both MEMORY.md and architecture docs
 - Tool gotchas in both tech docs and MEMORY.md
-- Project description in both CLAUDE.md and AGENTS.md and brief.md
+- Project description in both CLAUDE.md and AGENTS.md
 - **@import overlap**: A file imported via `@path` in global CLAUDE.md that is ALSO loaded as project-level auto-memory. This is double-loading — the same content appears twice in context.
 - **Cross-layer import overlap**: Profile files imported into CLAUDE.md that duplicate summaries already written inline in the same file or in MEMORY.md
 - **Brain file ↔ CLAUDE.md overlap**: Content in `~/.claude/brains/*.md` that duplicates information in CLAUDE.md, MEMORY.md, or other always-on files. Brain files should contain only ecosystem/shared context not present elsewhere.

@@ -181,10 +181,10 @@ def _infer_category(description: str) -> str:
                       "metadata for", "narrative arc", "pacing", "per-scene", "image prompts"]),
         ("creative", ["generate image", "concept art"]),
         ("research", ["research", "decision intelligence"]),
-        # Development (ship, fix, commit, scaffold) — before knowledge to avoid "memory bank" in ship desc
+        # Development (ship, fix, commit, scaffold)
         ("development", ["github issue", "commit", "open pr", "ship change", "fix.*issue",
                          "ship", "lint.*test.*review", "sub-project", "scaffold"]),
-        ("knowledge", ["obsidian", "vault note", "catalog insight", "memory bank", "sync.*compact"]),
+        ("knowledge", ["obsidian", "vault note", "catalog insight", "sync.*compact"]),
         # Fallback for setup/config skills
         ("infra", ["setup", "dry-run", "prerequisite"]),
     ]

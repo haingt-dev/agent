@@ -9,7 +9,7 @@
 #   - Skills match actual .claude/skills/ subdirs
 #   - Rules match actual .claude/rules/ files
 #   - MCPs match actual .mcp.json
-#   - Bootstrapped flag matches .memory-bank/ existence
+#   - Bootstrapped flag matches .claude/ existence
 
 set -e
 
@@ -65,7 +65,7 @@ for name in $(jq -r '.projects | keys[]' "$REGISTRY"); do
     path=$(jq -r --arg n "$name" '.projects[$n].path' "$REGISTRY")
     registered=$(jq -r --arg n "$name" '.projects[$n].bootstrapped' "$REGISTRY")
     actual=false
-    [ -d "$path/.memory-bank" ] && [ -d "$path/.claude" ] && actual=true
+    [ -d "$path/.claude" ] && actual=true
     if [ "$registered" != "$actual" ]; then
         yellow "  DRIFT: $name bootstrapped: registry=$registered actual=$actual"
         DRIFT=$((DRIFT + 1))

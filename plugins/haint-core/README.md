@@ -6,7 +6,7 @@ Core Claude Code plugin: 6 hooks for brain-powered memory, safety, and context m
 
 | Hook | Script | Purpose |
 |------|--------|---------|
-| **SessionStart** | `session-start.sh` | Git branch + recent commits, loads `.memory-bank/brief.md`, injects brain context (decisions, preferences, last session) |
+| **SessionStart** | `session-start.sh` | Git branch + recent commits, injects brain context (decisions, preferences, last session) |
 | **UserPromptSubmit** | `prompt-context.py` | Per-prompt brain injection: hybrid RRF search (general memories) + Semantic Toolbox (relevant tools). Dedup, token caps, skip-if-unchanged |
 | **PreToolUse (Bash)** | `pre-tool-safety.sh` | Two-tier safety — `deny` catastrophic commands, `ask` for risky operations |
 | **PostToolUse** | `post-tool-use.sh` → `search-and-store.py` | Auto-persist WebSearch/WebFetch/Context7 results to brain.db as discoveries |
@@ -29,10 +29,9 @@ Compact wipes all system-reminders from context window. PreCompact resets the pr
 
 Session context is layered:
 1. **Global CLAUDE.md** — behavioral instructions + `@import` for identity/career context
-2. **Project CLAUDE.md** — project-specific instructions
-3. **brief.md** — project identity (loaded by SessionStart hook)
-4. **Auto-memory (MEMORY.md)** — session learnings (managed by Claude Code)
-5. **haingt-brain** — cross-project semantic memory (MCP server, 7 tools)
+2. **Project CLAUDE.md** — project identity + project-specific instructions
+3. **Auto-memory (MEMORY.md)** — session learnings (managed by Claude Code)
+4. **haingt-brain** — cross-project semantic memory (MCP server, 7 tools)
 
 ## Install
 
