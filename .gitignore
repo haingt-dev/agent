@@ -9,10 +9,6 @@
 # Personal configuration (never commit)
 .env
 global/CLAUDE.md
-memories/
-
-# Ephemeral memory artifacts
-memories/**/token-audit.json
 
 # Python
 __pycache__/
