@@ -20,11 +20,14 @@ Design contract:
 import hashlib
 import json
 import os
+import socket
 import sys
+import urllib.error
+import urllib.request
 from collections import OrderedDict
 from datetime import date
 
-from .embeddings import _get_client, _load_env
+from .embeddings import _load_env
 
 # Ensure .env vars (JUDGE_ENABLED, JUDGE_MODEL, etc.) are loaded into os.environ
 # at module import time. Brain MCP server triggers .env load via _get_client()
@@ -32,6 +35,12 @@ from .embeddings import _get_client, _load_env
 # and never calls _get_client — so without this, hook-side judge would never see
 # JUDGE_ENABLED=true from the .env file.
 _load_env()
+
+# Judge uses urllib directly (NOT openai SDK) — same pattern as
+# prompt-context.py's embed_prompt and llm_classify. Reason: hook context runs
+# in fresh process per prompt, and openai SDK's httpx pool initialization adds
+# ~2-3s cold-start latency. urllib has minimal overhead (~50ms TCP+TLS).
+OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 
 # Soft-fail status codes for transparency in recall output
 STATUS_OK = "ok"
@@ -109,6 +118,58 @@ CRITICAL:
 - Type fit: query for "decisions about X" scores decision-type higher than entity-type mentions of X
 
 Return ONLY JSON: {"scores": [{"id": "...", "score": N}, ...]}"""
+
+
+def _chat_completion(
+    messages: list[dict],
+    timeout: float,
+    model: str | None = None,
+) -> tuple[dict | None, str]:
+    """POST to OpenAI chat completions via urllib. Returns (response_dict, status).
+
+    On success: (parsed_json, STATUS_OK).
+    On failure: (None, STATUS_* code). Soft-fail by design — caller treats
+    None response as fallback to RRF order.
+
+    Tests should mock this function rather than urllib directly.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None, STATUS_API_ERROR
+
+    payload = {
+        "model": model or _model(),
+        "messages": messages,
+        "response_format": {"type": "json_object"},
+        "temperature": 0,
+        "seed": 42,
+    }
+    body = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        OPENAI_CHAT_URL,
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+            return data, STATUS_OK
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            status = STATUS_RATE_LIMIT
+        else:
+            status = STATUS_API_ERROR
+        print(f"[judge] {status}: HTTP {e.code}: {e.reason}", file=sys.stderr)
+        return None, status
+    except (urllib.error.URLError, socket.timeout, TimeoutError) as e:
+        print(f"[judge] {STATUS_TIMEOUT}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None, STATUS_TIMEOUT
+    except Exception as e:
+        print(f"[judge] {STATUS_API_ERROR}: {type(e).__name__}: {e}", file=sys.stderr)
+        return None, STATUS_API_ERROR
 
 
 def _format_candidates(candidates: list[dict]) -> str:
@@ -189,50 +250,36 @@ def judge_relevance(
     import time
     t0 = time.perf_counter()
 
-    try:
-        client = _get_client().with_options(timeout=4.0)
-        resp = client.chat.completions.create(
-            model=_model(),
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-            seed=42,
-        )
-    except Exception as e:
-        # Soft-fail on any error — return RRF top-n unchanged
-        cls = type(e).__name__
-        if "Timeout" in cls or "TimeoutError" in cls:
-            status = STATUS_TIMEOUT
-        elif "RateLimit" in cls:
-            status = STATUS_RATE_LIMIT
-        else:
-            status = STATUS_API_ERROR
-        print(f"[judge] {status}: {cls}: {e}", file=sys.stderr)
-        telemetry["latency_ms"] = int((time.perf_counter() - t0) * 1000)
-        return candidates[:n], status, telemetry
-
+    raw_resp, status = _chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        timeout=4.0,
+    )
     telemetry["latency_ms"] = int((time.perf_counter() - t0) * 1000)
+
+    if status != STATUS_OK:
+        return candidates[:n], status, telemetry
 
     # Parse response
     try:
-        content = resp.choices[0].message.content
+        content = raw_resp["choices"][0]["message"]["content"]
         parsed = json.loads(content)
         scores = parsed.get("scores", [])
-        # Build id → score map
         score_map = {s["id"]: int(s["score"]) for s in scores if "id" in s and "score" in s}
     except Exception as e:
         print(f"[judge] parse error: {e}", file=sys.stderr)
         return candidates[:n], STATUS_PARSE_ERROR, telemetry
 
     # Telemetry
-    usage = getattr(resp, "usage", None)
-    if usage:
-        telemetry["tokens_in"] = usage.prompt_tokens
-        telemetry["tokens_out"] = usage.completion_tokens
-        telemetry["cost_usd"] = estimate_cost_usd(usage.prompt_tokens, usage.completion_tokens)
+    usage = raw_resp.get("usage") or {}
+    if usage.get("prompt_tokens"):
+        telemetry["tokens_in"] = usage["prompt_tokens"]
+        telemetry["tokens_out"] = usage.get("completion_tokens", 0)
+        telemetry["cost_usd"] = estimate_cost_usd(
+            usage["prompt_tokens"], usage.get("completion_tokens", 0)
+        )
 
     # Reorder candidates by judge score (descending). Candidates not scored
     # fall to the end in original RRF order.

@@ -34,14 +34,14 @@ def candidates():
 
 
 def _mock_chat_response(scores: list[dict], prompt_tokens: int = 200, completion_tokens: int = 50):
-    """Build a mock OpenAI chat.completions.create response."""
-    msg = MagicMock()
-    msg.message.content = json.dumps({"scores": scores})
-    resp = MagicMock()
-    resp.choices = [msg]
-    resp.usage.prompt_tokens = prompt_tokens
-    resp.usage.completion_tokens = completion_tokens
-    return resp
+    """Build a mock _chat_completion return value (dict form, not SDK object)."""
+    return {
+        "choices": [{"message": {"content": json.dumps({"scores": scores})}}],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        },
+    }
 
 
 class TestDisabled:
@@ -72,11 +72,8 @@ class TestReranking:
             {"id": "e5", "score": 3},
         ]
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
-            with patch.object(judge, "_get_client") as mock_client_factory:
-                mock_client = MagicMock()
-                mock_client.with_options.return_value = mock_client
-                mock_client.chat.completions.create.return_value = _mock_chat_response(mock_scores)
-                mock_client_factory.return_value = mock_client
+            with patch.object(judge, "_chat_completion") as mock_chat:
+                mock_chat.return_value = (_mock_chat_response(mock_scores), judge.STATUS_OK)
 
                 results, status, tel = judge.judge_relevance(
                     "godot navigation IronCradle", candidates, n=3
@@ -84,7 +81,6 @@ class TestReranking:
 
         assert status == judge.STATUS_OK
         assert [r["id"] for r in results] == ["d4", "a1", "c3"]
-        # Hard distractor b2 (wrong project) should NOT be in top-3
         assert "b2" not in [r["id"] for r in results]
         assert tel["tokens_in"] == 200
         assert tel["tokens_out"] == 50
@@ -94,16 +90,8 @@ class TestReranking:
 class TestFallback:
     def test_timeout_falls_back_to_rrf(self, candidates):
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
-            with patch.object(judge, "_get_client") as mock_client_factory:
-                mock_client = MagicMock()
-                mock_client.with_options.return_value = mock_client
-
-                class FakeTimeoutError(Exception):
-                    pass
-                FakeTimeoutError.__name__ = "TimeoutError"
-                mock_client.chat.completions.create.side_effect = FakeTimeoutError("timed out")
-                mock_client_factory.return_value = mock_client
-
+            with patch.object(judge, "_chat_completion") as mock_chat:
+                mock_chat.return_value = (None, judge.STATUS_TIMEOUT)
                 results, status, _ = judge.judge_relevance("query", candidates, n=3)
 
         assert status == judge.STATUS_TIMEOUT
@@ -111,16 +99,8 @@ class TestFallback:
 
     def test_rate_limit_falls_back(self, candidates):
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
-            with patch.object(judge, "_get_client") as mock_client_factory:
-                mock_client = MagicMock()
-                mock_client.with_options.return_value = mock_client
-
-                class FakeRateLimitError(Exception):
-                    pass
-                FakeRateLimitError.__name__ = "RateLimitError"
-                mock_client.chat.completions.create.side_effect = FakeRateLimitError("429")
-                mock_client_factory.return_value = mock_client
-
+            with patch.object(judge, "_chat_completion") as mock_chat:
+                mock_chat.return_value = (None, judge.STATUS_RATE_LIMIT)
                 results, status, _ = judge.judge_relevance("query", candidates, n=3)
 
         assert status == judge.STATUS_RATE_LIMIT
@@ -128,17 +108,12 @@ class TestFallback:
 
     def test_malformed_json_falls_back(self, candidates):
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
-            with patch.object(judge, "_get_client") as mock_client_factory:
-                mock_client = MagicMock()
-                mock_client.with_options.return_value = mock_client
-                bad_resp = MagicMock()
-                bad_msg = MagicMock()
-                bad_msg.message.content = "not json {"
-                bad_resp.choices = [bad_msg]
-                bad_resp.usage = None
-                mock_client.chat.completions.create.return_value = bad_resp
-                mock_client_factory.return_value = mock_client
-
+            with patch.object(judge, "_chat_completion") as mock_chat:
+                bad_resp = {
+                    "choices": [{"message": {"content": "not json {"}}],
+                    "usage": {"prompt_tokens": 100, "completion_tokens": 5},
+                }
+                mock_chat.return_value = (bad_resp, judge.STATUS_OK)
                 results, status, _ = judge.judge_relevance("query", candidates, n=3)
 
         assert status == judge.STATUS_PARSE_ERROR
@@ -149,11 +124,8 @@ class TestCache:
     def test_cache_hit_on_identical_set(self, candidates):
         mock_scores = [{"id": c["id"], "score": 10 - i} for i, c in enumerate(candidates)]
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
-            with patch.object(judge, "_get_client") as mock_client_factory:
-                mock_client = MagicMock()
-                mock_client.with_options.return_value = mock_client
-                mock_client.chat.completions.create.return_value = _mock_chat_response(mock_scores)
-                mock_client_factory.return_value = mock_client
+            with patch.object(judge, "_chat_completion") as mock_chat:
+                mock_chat.return_value = (_mock_chat_response(mock_scores), judge.STATUS_OK)
 
                 _, status1, tel1 = judge.judge_relevance("godot query", candidates, n=3)
                 _, status2, tel2 = judge.judge_relevance("godot query", candidates, n=3)
@@ -163,7 +135,7 @@ class TestCache:
         assert tel1["cache_hit"] is False
         assert tel2["cache_hit"] is True
         # Should have called the API only once
-        assert mock_client.chat.completions.create.call_count == 1
+        assert mock_chat.call_count == 1
 
     def test_cache_key_order_independent(self, candidates):
         """Same candidates in different order → same cache key."""
