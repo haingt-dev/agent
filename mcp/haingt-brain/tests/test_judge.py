@@ -33,10 +33,12 @@ def candidates():
     ]
 
 
-def _mock_chat_response(scores: list[dict], prompt_tokens: int = 200, completion_tokens: int = 50):
-    """Build a mock _chat_completion return value (dict form, not SDK object)."""
+def _mock_chat_response(scores: list[int], prompt_tokens: int = 200, completion_tokens: int = 50):
+    """Build a mock _chat_completion return value with compact positional array.
+    `scores` is a list[int] matching candidate order.
+    """
     return {
-        "choices": [{"message": {"content": json.dumps({"scores": scores})}}],
+        "choices": [{"message": {"content": json.dumps({"s": scores})}}],
         "usage": {
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
@@ -63,14 +65,9 @@ class TestMinCandidates:
 
 class TestReranking:
     def test_judge_reorders_by_score(self, candidates):
-        # Mock: judge ranks d4 highest (project + topic match), then a1, then c3
-        mock_scores = [
-            {"id": "a1", "score": 7},
-            {"id": "b2", "score": 1},  # wrong project, hard distractor
-            {"id": "c3", "score": 4},
-            {"id": "d4", "score": 9},
-            {"id": "e5", "score": 3},
-        ]
+        # Positional array — same order as candidates fixture: [a1, b2, c3, d4, e5]
+        # Judge scores: a1=7, b2=1 (hard distractor), c3=4, d4=9, e5=3
+        mock_scores = [7, 1, 4, 9, 3]
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
             with patch.object(judge, "_chat_completion") as mock_chat:
                 mock_chat.return_value = (_mock_chat_response(mock_scores), judge.STATUS_OK)
@@ -122,7 +119,8 @@ class TestFallback:
 
 class TestCache:
     def test_cache_hit_on_identical_set(self, candidates):
-        mock_scores = [{"id": c["id"], "score": 10 - i} for i, c in enumerate(candidates)]
+        # Positional array: 10, 9, 8, 7, 6 for the 5 candidates
+        mock_scores = [10 - i for i in range(len(candidates))]
         with patch.dict(os.environ, {"JUDGE_ENABLED": "true", "JUDGE_MIN_CANDIDATES": "4"}, clear=False):
             with patch.object(judge, "_chat_completion") as mock_chat:
                 mock_chat.return_value = (_mock_chat_response(mock_scores), judge.STATUS_OK)
