@@ -132,7 +132,7 @@ def test_budget_gate_blocks_judge(db, monkeypatch):
 
 
 def test_oversample_pool_size(db, monkeypatch):
-    """Verify _oversample_k is respected — for k=5, pool should be 15 not 5."""
+    """Verify _oversample_k is respected — for k=5, pool should be 10 (k*2)."""
     captured_k = {}
 
     def capture(conn, q, mt, p, k, time_range=None):
@@ -144,13 +144,13 @@ def test_oversample_pool_size(db, monkeypatch):
     monkeypatch.setenv("JUDGE_ENABLED", "false")
 
     recall_mod.brain_recall(db, "godot", k=5)
-    assert captured_k["k"] == 15  # 5 * 3
+    assert captured_k["k"] == 10  # 5 * 2
 
     recall_mod.brain_recall(db, "godot", k=1)
-    assert captured_k["k"] == 10  # floor at 10
+    assert captured_k["k"] == 8   # floor at 8
 
     recall_mod.brain_recall(db, "godot", k=10)
-    assert captured_k["k"] == 20  # ceiling at 20
+    assert captured_k["k"] == 12  # ceiling at 12
 
 
 def test_judge_telemetry_updates_brain_meta(db, monkeypatch):

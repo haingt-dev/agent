@@ -149,16 +149,17 @@ class TestCache:
 class TestOversamplePolicy:
     def test_oversample_k_floor(self):
         from haingt_brain.tools.recall import _oversample_k
-        assert _oversample_k(1) == 10  # floor
-        assert _oversample_k(3) == 10  # max(9, 10) = 10
-        assert _oversample_k(4) == 12
-        assert _oversample_k(5) == 15
-        assert _oversample_k(7) == 20  # max(21, 10) capped at 20
+        assert _oversample_k(1) == 8   # floor
+        assert _oversample_k(3) == 8   # max(6, 8) = 8
+        assert _oversample_k(4) == 8   # max(8, 8) = 8
+        assert _oversample_k(5) == 10  # max(10, 8) = 10
+        assert _oversample_k(6) == 12  # max(12, 8) capped at 12
 
     def test_oversample_k_ceiling(self):
         from haingt_brain.tools.recall import _oversample_k
-        assert _oversample_k(20) == 20  # ceiling
-        assert _oversample_k(100) == 20
+        assert _oversample_k(7) == 12   # ceiling
+        assert _oversample_k(20) == 12
+        assert _oversample_k(100) == 12
 
 
 class TestRecursionGuard:

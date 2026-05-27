@@ -28,12 +28,15 @@ from ..search import hybrid_search
 
 
 def _oversample_k(k: int) -> int:
-    """Adaptive oversampling cap: max(k*3, 10), ceiling 20.
+    """Adaptive oversampling cap: max(k*2, 8), ceiling 12.
 
-    Floor 10 ensures small-k queries get a meaningful judge pool.
-    Ceiling 20 matches search.py internal FTS/vec LIMIT.
+    Reduced from k*3/cap-20 after measuring real judge latency: 15-candidate
+    pools took 3-5s from VN host (~1000 input tokens). Ceiling 12 keeps judge
+    prompt ≤800 tokens → typical 2-3s, fits within 6s timeout.
+
+    Floor 8 ensures small-k queries (k=1,2,3) still get meaningful judge pool.
     """
-    return min(max(k * 3, 10), 20)
+    return min(max(k * 2, 8), 12)
 
 
 def _bump_access_counts(conn: sqlite3.Connection, ids: list[str]) -> None:

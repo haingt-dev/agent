@@ -255,7 +255,7 @@ def judge_relevance(
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        timeout=4.0,
+        timeout=6.0,
     )
     telemetry["latency_ms"] = int((time.perf_counter() - t0) * 1000)
 
