@@ -190,7 +190,7 @@ def judge_relevance(
     t0 = time.perf_counter()
 
     try:
-        client = _get_client().with_options(timeout=1.5)
+        client = _get_client().with_options(timeout=4.0)
         resp = client.chat.completions.create(
             model=_model(),
             messages=[
