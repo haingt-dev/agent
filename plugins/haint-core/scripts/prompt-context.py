@@ -137,6 +137,16 @@ except Exception:
     _normalize_vn = lambda x: x  # no-op fallback
     _strip_viet = lambda x: x.lower()  # fallback: just lowercase
 
+# Output gate: LLM judge for retrieved memories.
+# Shares JUDGE_ENABLED env toggle with brain_recall (Path A) so both paths
+# turn on together. Soft-fails to RRF order on import/api error.
+try:
+    from haingt_brain.judge import judge_relevance as _judge_relevance
+    _HAS_JUDGE = True
+except Exception:
+    _HAS_JUDGE = False
+    _judge_relevance = None
+
 
 # ── Input ─────────────────────────────────────────────────────────────────
 
@@ -164,14 +174,17 @@ LLM_TIEBREAK_LOG = Path("/tmp/brain-llm-tiebreak.log")
 LLM_CLASSIFIER_MODEL = "gpt-4o-mini"
 LLM_CLASSIFIER_TIMEOUT = 1.0  # hard cap — fall back to heuristic if exceeded
 LLM_CLASSIFIER_SYSTEM = (
-    "Answer ONLY 'yes' or 'no'. "
-    "Does this user prompt benefit from injecting past memory context "
-    "(prior decisions, patterns, discoveries, file/module knowledge)? "
-    "yes when: references past work, file/module names, architecture/design questions, "
-    "project state queries, debugging in specific code. "
-    "no when: trivial acknowledgments, pure syntax lookup with no project context, "
-    "transitional filler before next ask. "
-    "Bias toward yes when uncertain."
+    "You are a memory gatekeeper. Memory injection is expensive — it costs tokens, "
+    "consumes attention budget, and risks introducing irrelevant context that degrades "
+    "reasoning (hard distractor effect from First Drop of Ink research). "
+    "Decide: allow memory injection for this user prompt? "
+    "Allow when memory provides DECISIVE benefit: prompt references specific past work, "
+    "files/modules, design decisions, project state, or named concepts/libraries. "
+    "Reject when prompt is self-contained, conversational filler, trivial syntax lookup, "
+    "generic 'how do I X' without project context, or a code task that can be answered "
+    "by reading the current file. "
+    "When uncertain, prefer allow (lost context > wasted tokens). "
+    "Output exactly one token: 'yes' to allow or 'no' to reject."
 )
 
 # Contrast markers signal substantive content even after ack phrase
@@ -230,7 +243,7 @@ def llm_classify(prompt: str) -> str | None:
             ],
             "temperature": 0,
             "seed": 42,
-            "max_tokens": 2,
+            "max_tokens": 1,  # 'yes'/'no' tokenize to 1 token each in cl100k_base
         }).encode()
         req = urllib.request.Request(
             "https://api.openai.com/v1/chat/completions",
@@ -804,10 +817,21 @@ if __name__ == "__main__":
     conn = connect_db(need_vec=(embedding is not None))
     memory_ids_to_save = None
     if conn and budget_remaining > 0:
-        # Phase 1: General memories — over-fetch, dedup, top-K, token cap
+        # Phase 1: General memories — over-fetch, dedup, judge, top-K, token cap
         general = search_general_hybrid(conn, combined, embedding, project)
         new_general = [r for r in general if r["id"] not in injected]
-        new_general = new_general[:MAX_GENERAL_RESULTS]  # top-K after dedup
+        # Output gate: LLM judge filters by intent before top-K slice. Shares
+        # JUDGE_ENABLED env toggle with Path A. Soft-fails to RRF order on error.
+        # JUDGE_MIN_CANDIDATES (default 4) gates against tiny pools internally.
+        if _HAS_JUDGE and len(new_general) > MAX_GENERAL_RESULTS:
+            try:
+                judged, _judge_status, _ = _judge_relevance(
+                    combined, new_general, n=MAX_GENERAL_RESULTS
+                )
+                new_general = judged
+            except Exception:
+                pass  # keep RRF order on any unexpected error
+        new_general = new_general[:MAX_GENERAL_RESULTS]  # top-K after dedup+judge
         # Apply token cap
         capped_general = []
         capped_chars = 0
