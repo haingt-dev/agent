@@ -40,7 +40,7 @@ import struct
 import sys
 import time
 import urllib.request
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
@@ -147,6 +147,202 @@ def get_prompt() -> str | None:
         return data.get("prompt", "")
     except Exception:
         return None
+
+
+# ── Path C: skip gate ─────────────────────────────────────────────────────
+# Bias HARD toward "include by default" — false positives (search when not needed)
+# cost ~$0.001 + 300ms; false negatives (skip when memory would help) cost lost
+# context and worse reasoning. Add patterns only when very confident.
+#
+# Continuation patterns are 5+ words because the ≤4-word gate already catches
+# pure-ack prompts. These patterns target continuations/imperatives that bypass
+# the word-count gate.
+SKIP_LOG = Path("/tmp/brain-skip.log")
+LLM_TIEBREAK_LOG = Path("/tmp/brain-llm-tiebreak.log")
+
+# Hybrid Option 2: LLM tiebreaker config
+LLM_CLASSIFIER_MODEL = "gpt-4o-mini"
+LLM_CLASSIFIER_TIMEOUT = 1.0  # hard cap — fall back to heuristic if exceeded
+LLM_CLASSIFIER_SYSTEM = (
+    "Answer ONLY 'yes' or 'no'. "
+    "Does this user prompt benefit from injecting past memory context "
+    "(prior decisions, patterns, discoveries, file/module knowledge)? "
+    "yes when: references past work, file/module names, architecture/design questions, "
+    "project state queries, debugging in specific code. "
+    "no when: trivial acknowledgments, pure syntax lookup with no project context, "
+    "transitional filler before next ask. "
+    "Bias toward yes when uncertain."
+)
+
+# Contrast markers signal substantive content even after ack phrase
+# (e.g., "ok continue but check abc", "tiếp tục nhưng sửa chỗ kia")
+CONTRAST_MARKERS = {
+    "but", "however", "though", "except", "actually", "wait",
+    "nhưng", "tuy nhiên", "ngoại trừ", "thực ra", "khoan",
+}
+
+# Word count above which ack-prefix patterns DON'T trigger skip.
+# Pure-ack continuations are typically 5-8 words ("ok let me try that approach").
+# Anything longer likely contains substantive feedback/instructions.
+SUBSTANTIVE_WORD_THRESHOLD = 8
+
+# CONFIDENT patterns — 100% skip, no LLM consult needed.
+# Slash commands invoke skills that load their own context. Bash escapes
+# (!cmd) are shell pass-through, not user dialogue.
+CONFIDENT_SKIP_PATTERNS = [
+    (re.compile(r'^/[a-z][a-z0-9_-]*(\s|$)', re.I), "slash"),
+    (re.compile(r'^!', re.I), "bash"),
+]
+
+# TENTATIVE patterns — heuristic guess only. LLM tiebreaker decides for
+# real because these can fire on prompts like "ok let me try recall.py fix"
+# where the ack prefix masks a real file-context need.
+TENTATIVE_SKIP_PATTERNS = [
+    # English continuations >4 words: "ok let me try that approach"
+    (re.compile(r'^(ok|yes|sure|alright|right|got it|cool|nice|good|great)[,.]?\s+(let|let\'?s|just|then|now|go|please|do|make|try|run|continue|proceed)\b', re.I), "continuation_en"),
+    # VN continuations >4 words: "ok tiếp tục với cách đó nhé", "ok làm theo cách đó nhé"
+    (re.compile(r'^(ok|được|đúng|tiếp|làm|thử)\s+(rồi|đi|tiếp|nha|nhé|tục|theo|vậy|làm|thử|cứ|cách)\b', re.I), "continuation_vn"),
+    # Pure imperative actions: "go ahead and proceed with it" "just do it now please"
+    (re.compile(r'^(go ahead|just do|please do|now do|do that|làm đi|chạy đi)\b', re.I), "imperative"),
+    # Pure thanks/closing >4 words: "thanks that worked perfectly now"
+    (re.compile(r'^(thanks?|thank you|cảm ơn|cám ơn|tks)[,.\s]', re.I), "ack_thanks"),
+]
+
+# Backwards-compat alias for any external test referencing the old name
+SKIP_PATTERNS = CONFIDENT_SKIP_PATTERNS + TENTATIVE_SKIP_PATTERNS
+
+
+def llm_classify(prompt: str) -> str | None:
+    """LLM tiebreaker via urllib (matches embed_prompt pattern).
+
+    Returns 'skip' / 'include' / None (on error or no API key).
+    Cost ~$0.00002/call, latency ~200-500ms (1s hard timeout).
+    """
+    api_key = get_api_key()
+    if not api_key:
+        return None
+    try:
+        body = json.dumps({
+            "model": LLM_CLASSIFIER_MODEL,
+            "messages": [
+                {"role": "system", "content": LLM_CLASSIFIER_SYSTEM},
+                {"role": "user", "content": prompt[:500]},
+            ],
+            "temperature": 0,
+            "seed": 42,
+            "max_tokens": 2,
+        }).encode()
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+        )
+        resp = urllib.request.urlopen(req, timeout=LLM_CLASSIFIER_TIMEOUT)
+        data = json.loads(resp.read())
+        content = data["choices"][0]["message"]["content"].strip().lower()
+        if content.startswith("no"):
+            return "skip"
+        return "include"
+    except Exception:
+        return None
+
+
+def _log_llm_tiebreak(decision: str, heuristic: str, prompt: str) -> None:
+    """Log LLM tiebreaker decision for observability (skip OR include)."""
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
+        prompt_preview = prompt.strip().replace("\n", " ")[:60]
+        with LLM_TIEBREAK_LOG.open("a") as f:
+            f.write(f"{ts}\t{decision}\theuristic={heuristic}\t{prompt_hash}\t{prompt_preview}\n")
+    except Exception:
+        pass
+
+
+def should_skip_brain(prompt: str) -> tuple[bool, str]:
+    """Return (skip, reason). Hybrid Option 2: heuristic + LLM tiebreaker.
+
+    Decision tree:
+      1-5. Confident heuristics (too_short, too_long, trivial_short,
+           substantive_length, contrast_marker) — never consult LLM.
+      6. Ambiguous zone (5-8 words, no contrast): heuristic patterns + LLM
+         tiebreaker. LLM wins on disagreement. LLM API failure → fall back
+         to heuristic alone.
+
+    Pattern matching is LAST among confident heuristics. Substantive-content
+    signals (word count, contrast markers) all override patterns —
+    "tiếp tục theo plan A nhưng chỉnh sửa abc" must INCLUDE despite starting
+    with the "tiếp tục" continuation prefix.
+    """
+    stripped = prompt.strip()
+    if len(stripped) < MIN_PROMPT_LENGTH:
+        return True, "too_short"
+    if len(stripped) > 5000:
+        return False, "long_prompt"
+    # Confident pattern skips — no LLM consult
+    for pat, name in CONFIDENT_SKIP_PATTERNS:
+        if pat.match(stripped):
+            return True, f"confident:{name}"
+    words = stripped.split()
+    if len(words) <= 4 and "?" not in stripped:
+        return True, "trivial_short"
+    if len(words) > SUBSTANTIVE_WORD_THRESHOLD:
+        return False, "substantive_length"
+    lower = stripped.lower()
+    for marker in CONTRAST_MARKERS:
+        if f" {marker} " in f" {lower} " or lower.startswith(f"{marker} "):
+            return False, f"contrast:{marker}"
+
+    # ── Ambiguous zone (5-8 words, no contrast) ──
+    # Heuristic provides first opinion via TENTATIVE patterns; LLM tiebreaks.
+    heuristic_skip = False
+    heuristic_name = "default_include"
+    for pat, name in TENTATIVE_SKIP_PATTERNS:
+        if pat.match(stripped):
+            heuristic_skip = True
+            heuristic_name = name
+            break
+
+    llm_decision = llm_classify(stripped)
+
+    if llm_decision is None:
+        # API failed — trust heuristic alone
+        if heuristic_skip:
+            return True, f"pattern:{heuristic_name}|llm_fail"
+        return False, "default_include|llm_fail"
+
+    # Log every LLM tiebreaker decision for analysis
+    _log_llm_tiebreak(llm_decision, heuristic_name, prompt)
+
+    # Both signals agree
+    if heuristic_skip and llm_decision == "skip":
+        return True, f"agree_skip:{heuristic_name}"
+    if (not heuristic_skip) and llm_decision == "include":
+        return False, "agree_include"
+
+    # Disagreement — LLM wins (sees full context, not just prefix patterns)
+    if heuristic_skip and llm_decision == "include":
+        return False, f"llm_override_pattern:{heuristic_name}"
+    if (not heuristic_skip) and llm_decision == "skip":
+        return True, "llm_only_skip"
+
+    return False, "include"  # defensive fallthrough
+
+
+def _log_skip(reason: str, prompt: str) -> None:
+    """Append skip event to /tmp/brain-skip.log for observability."""
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
+        prompt_preview = prompt.strip().replace("\n", " ")[:60]
+        line = f"{ts}\t{reason}\t{prompt_hash}\t{prompt_preview}\n"
+        with SKIP_LOG.open("a") as f:
+            f.write(line)
+    except Exception:
+        pass  # observability never blocks the hook
 
 
 def detect_project() -> str | None:
@@ -568,13 +764,17 @@ def _fts5_tool_search(
 
 if __name__ == "__main__":
     prompt = get_prompt()
-    if not prompt or len(prompt.strip()) < MIN_PROMPT_LENGTH:
+    if not prompt:
+        sys.exit(0)
+
+    # Path C: unified skip gate (consolidates length/slash/trivial-short checks
+    # + adds continuation/imperative patterns). Logs skip reason for observability.
+    skip, reason = should_skip_brain(prompt)
+    if skip:
+        _log_skip(reason, prompt)
         sys.exit(0)
 
     stripped = prompt.strip()
-    if stripped.startswith("/") or stripped.startswith("!"):
-        sys.exit(0)
-
     # Normalize Vietnamese Telex leaks before search + embedding
     normalized = _normalize_vn(stripped)
 

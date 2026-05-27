@@ -83,6 +83,8 @@ def brain_recall(
 
     Use BEFORE starting work to find prior decisions, patterns, and context.
     Returns the most relevant memories ranked by combined keyword and meaning match.
+    When JUDGE_ENABLED=true, results are LLM-reranked for contextual relevance
+    (+400-800ms latency, soft-fail to RRF order on any error).
 
     Args:
         query: Natural language search query. Be descriptive for better results.

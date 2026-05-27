@@ -13,17 +13,22 @@ def hybrid_search(
     project: str | None = None,
     k: int = 5,
     rrf_k: int = 60,
+    time_range: str | None = None,
 ) -> list[dict]:
     """
     Search memories using Reciprocal Rank Fusion combining FTS5 and vector search.
 
     RRF score = 1/(rrf_k + fts_rank) + 1/(rrf_k + vec_rank)
     Items appearing in both searches rank highest.
+
+    time_range is a SQLite datetime modifier (e.g., '-7 days'). Applied as a
+    SQL WHERE clause BEFORE top-k selection so older valid matches in the
+    candidate pool are not filtered to empty post-retrieval.
     """
     query_embedding = embed_text(query)
     emb_bytes = serialize_embedding(query_embedding)
 
-    # Build type/project filter clause
+    # Build type/project/time filter clause
     filters = []
     params: dict = {}
     if memory_type:
@@ -32,6 +37,9 @@ def hybrid_search(
     if project:
         filters.append("(m.project = :project OR m.project IS NULL)")
         params["project"] = project
+    if time_range:
+        filters.append("m.created_at >= datetime('now', :time_range)")
+        params["time_range"] = time_range
     where_clause = " AND ".join(filters) if filters else "1=1"
 
     sql = f"""
@@ -73,19 +81,14 @@ def hybrid_search(
         rows = conn.execute(sql, params).fetchall()
     except sqlite3.OperationalError:
         # Fallback: vector-only search if FTS fails (e.g., empty FTS table)
-        rows = vector_search(conn, query_embedding, memory_type, project, k)
+        rows = vector_search(conn, query_embedding, memory_type, project, k, time_range)
         return rows
 
-    # Update access counts (importance NOT boosted — breaks positive feedback loop)
-    for row in rows:
-        conn.execute(
-            """UPDATE memories
-               SET access_count = access_count + 1,
-                   last_accessed = datetime('now')
-               WHERE id = ?""",
-            (row["id"],),
-        )
-    conn.commit()
+    # NOTE: access_count update intentionally removed here. Moved to
+    # tools/recall.py to apply only to the final top-n AFTER judge filtering.
+    # With oversampling (k*3) introduced for the judge layer, incrementing
+    # access_count for the whole candidate pool would inflate counters for
+    # memories the judge drops, distorting importance signals.
 
     return [dict(row) for row in rows]
 
@@ -96,6 +99,7 @@ def vector_search(
     memory_type: str | None = None,
     project: str | None = None,
     k: int = 5,
+    time_range: str | None = None,
 ) -> list[dict]:
     """Pure vector search fallback."""
     emb_bytes = serialize_embedding(query_embedding)
@@ -108,6 +112,9 @@ def vector_search(
     if project:
         filters.append("(m.project = :project OR m.project IS NULL)")
         params["project"] = project
+    if time_range:
+        filters.append("m.created_at >= datetime('now', :time_range)")
+        params["time_range"] = time_range
     where_clause = " AND ".join(filters) if filters else "1=1"
 
     sql = f"""
@@ -124,14 +131,5 @@ def vector_search(
     params.update({"embedding": emb_bytes, "k_vec": k * 4, "k": k})
     rows = conn.execute(sql, params).fetchall()
 
-    for row in rows:
-        conn.execute(
-            """UPDATE memories
-               SET access_count = access_count + 1,
-                   last_accessed = datetime('now')
-               WHERE id = ?""",
-            (row["id"],),
-        )
-    conn.commit()
-
+    # NOTE: access_count update moved to tools/recall.py (see comment in hybrid_search)
     return [dict(row) for row in rows]

@@ -157,11 +157,16 @@ Flow: generate ID → embed content → INSERT memories + memory_vectors + memor
 ```
 
 ### brain_recall
-Search memories using hybrid semantic + keyword search.
+Search memories using hybrid semantic + keyword search. When `JUDGE_ENABLED=true`,
+results are LLM-reranked for contextual relevance (+400-800ms, soft-fail to RRF
+on any error). First result entry carries `_judge_status` field.
 ```
 Params: query (str), type? (str), project? (str), k (int=5), time_range? (str, e.g. '-7 days')
-Returns: [{id, content, type, tags, project, created_at, access_count, relevance}]
-Flow: embed query → FTS5 top-20 + vector top-20 → RRF combine → filter → update access_count
+Returns: [{id, content, type, tags, project, created_at, access_count, relevance, _judge_status?}]
+Flow: embed query → FTS5 top-20 + vector top-20 → RRF combine → oversample (k*3, capped 10-20)
+      → budget gate → LLM judge rerank (if enabled) → top-k → update access_count on final top-n
+Env:  JUDGE_ENABLED, JUDGE_MODEL (default gpt-4o-mini), JUDGE_DAILY_BUDGET_USD (default 0.50),
+      JUDGE_MIN_CANDIDATES (default 4), JUDGE_DEBUG
 ```
 
 ### brain_forget
@@ -195,7 +200,7 @@ Params: action (str: start|save|status|consolidate), project?, session_id?, summ
 Actions:
   start  → create session, auto-consolidate if >7 days, return context (recent sessions, decisions, preferences, entities)
   save   → mark session ended, persist summary + auto-create memories from decisions/discoveries/entities lists
-  status → return {total_memories, by_type, created_last_7_days, total_sessions, sessions_with_summary}
+  status → return {total_memories, by_type, created_last_7_days, total_sessions, sessions_with_summary, importance_tiers?, judge_stats?}
   consolidate → run all 3 consolidation strategies, return report
 ```
 

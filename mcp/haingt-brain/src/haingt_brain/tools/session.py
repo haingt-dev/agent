@@ -66,11 +66,15 @@ def brain_session_start(conn: sqlite3.Connection, project: str | None = None) ->
             for r in rows
         ]
 
-    # Active preferences (always relevant)
+    # Active preferences — multiplicative soft-decay (importance dominates, recency soft modifier)
+    # Score = importance * (0.7 + 0.3 * (1 - min(age_years, 1)))
+    # 0.9 importance, 1yr old: 0.63 — still beats 0.4 importance fresh: 0.40
     prefs = conn.execute(
         """SELECT id, content, tags FROM memories
            WHERE type = 'preference' AND (project = ? OR project IS NULL)
-           ORDER BY updated_at DESC LIMIT 5""",
+           ORDER BY COALESCE(importance, 0.5) * (
+               0.7 + 0.3 * (1.0 - MIN((julianday('now') - julianday(updated_at)) / 365.0, 1.0))
+           ) DESC LIMIT 5""",
         (project,),
     ).fetchall()
     if prefs:
@@ -280,4 +284,38 @@ def brain_session_status(conn: sqlite3.Connection) -> dict:
         result["importance_tiers"] = importance_tiers
     if loop_risk:
         result["loop_risk"] = loop_risk
+
+    # Judge layer telemetry (added by Path A — null if judge has never run)
+    try:
+        judge_keys = (
+            "judge_calls_total",
+            "judge_tokens_total",
+            "judge_fallback_total",
+            "judge_cost_today",
+            "judge_cost_date",
+        )
+        rows = {
+            r["key"]: r["value"]
+            for r in conn.execute(
+                f"SELECT key, value FROM brain_meta WHERE key IN ({','.join('?' * len(judge_keys))})",
+                judge_keys,
+            ).fetchall()
+        }
+        if rows:
+            judge_stats = {}
+            if "judge_calls_total" in rows:
+                judge_stats["calls_total"] = int(rows["judge_calls_total"])
+            if "judge_tokens_total" in rows:
+                judge_stats["tokens_total"] = int(rows["judge_tokens_total"])
+            if "judge_fallback_total" in rows:
+                judge_stats["fallback_total"] = int(rows["judge_fallback_total"])
+            if "judge_cost_today" in rows:
+                judge_stats["cost_today_usd"] = round(float(rows["judge_cost_today"]), 4)
+            if "judge_cost_date" in rows:
+                judge_stats["cost_date"] = rows["judge_cost_date"]
+            if judge_stats:
+                result["judge_stats"] = judge_stats
+    except Exception:
+        pass
+
     return result
