@@ -24,7 +24,14 @@ import sys
 from collections import OrderedDict
 from datetime import date
 
-from .embeddings import _get_client
+from .embeddings import _get_client, _load_env
+
+# Ensure .env vars (JUDGE_ENABLED, JUDGE_MODEL, etc.) are loaded into os.environ
+# at module import time. Brain MCP server triggers .env load via _get_client()
+# when embedding, but hook context (prompt-context.py) uses urllib for embeddings
+# and never calls _get_client — so without this, hook-side judge would never see
+# JUDGE_ENABLED=true from the .env file.
+_load_env()
 
 # Soft-fail status codes for transparency in recall output
 STATUS_OK = "ok"
