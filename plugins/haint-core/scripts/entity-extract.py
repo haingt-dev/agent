@@ -72,8 +72,9 @@ Findings:
             data=json.dumps({
                 "model": "gpt-5.4-nano",
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 500,
+                "max_completion_tokens": 1000,  # gpt-5.x: replaces max_tokens, bumped 2x for o200k_base
                 "temperature": 0.0,
+                "service_tier": "flex",  # 50% discount
             }).encode(),
             headers={
                 "Authorization": f"Bearer {api_key}",

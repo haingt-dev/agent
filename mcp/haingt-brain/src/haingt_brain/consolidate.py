@@ -627,8 +627,9 @@ Rules:
 Memories:
 {cluster_content[:2000]}"""
             }],
-            max_tokens=150,
+            max_completion_tokens=300,  # gpt-5.x: replaces max_tokens, bumped 2x for o200k_base tokenizer
             temperature=0,
+            service_tier="flex",  # 50% discount, marginal latency variance
         )
         return response.choices[0].message.content.strip()
     except Exception:

@@ -71,8 +71,9 @@ def _distill_to_facts(raw_content: str, tool_type: str) -> str:
 Content:
 {raw_content[:2000]}"""
             }],
-            max_tokens=200,
+            max_completion_tokens=400,  # gpt-5.x: replaces max_tokens, bumped 2x for o200k_base
             temperature=0,
+            service_tier="flex",
         )
         facts = response.choices[0].message.content.strip()
         if facts.upper() == "SKIP" or len(facts) < 20:
