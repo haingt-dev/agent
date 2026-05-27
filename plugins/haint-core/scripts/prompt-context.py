@@ -171,20 +171,88 @@ SKIP_LOG = Path("/tmp/brain-skip.log")
 LLM_TIEBREAK_LOG = Path("/tmp/brain-llm-tiebreak.log")
 
 # Hybrid Option 2: LLM tiebreaker config
-LLM_CLASSIFIER_MODEL = "gpt-4o-mini"
-LLM_CLASSIFIER_TIMEOUT = 1.0  # hard cap — fall back to heuristic if exceeded
+LLM_CLASSIFIER_MODEL = "gpt-5.4-nano"
+LLM_CLASSIFIER_TIMEOUT = 10.0  # generous — soft-fall to heuristic on timeout
+# System prompt padded to ≥1024 tokens to trigger OpenAI prompt caching.
+# Cached prefix billed at 10% standard rate; cache TTL 5-10 min in-memory.
 LLM_CLASSIFIER_SYSTEM = (
-    "You are a memory gatekeeper. Memory injection is expensive — it costs tokens, "
-    "consumes attention budget, and risks introducing irrelevant context that degrades "
-    "reasoning (hard distractor effect from First Drop of Ink research). "
-    "Decide: allow memory injection for this user prompt? "
-    "Allow when memory provides DECISIVE benefit: prompt references specific past work, "
-    "files/modules, design decisions, project state, or named concepts/libraries. "
-    "Reject when prompt is self-contained, conversational filler, trivial syntax lookup, "
-    "generic 'how do I X' without project context, or a code task that can be answered "
-    "by reading the current file. "
-    "When uncertain, prefer allow (lost context > wasted tokens). "
-    "Output exactly one token: 'yes' to allow or 'no' to reject."
+    "You are a memory gatekeeper for an AI coding assistant. Each user prompt arrives "
+    "and you must decide whether to inject relevant past memory context (prior decisions, "
+    "patterns, discoveries, file/module knowledge) before the assistant responds. "
+    "Memory injection is expensive — it costs tokens, consumes attention budget, and "
+    "risks introducing irrelevant context that degrades reasoning quality. This effect "
+    "is documented in the First Drop of Ink research (arXiv 2605.10828): even 10% hard "
+    "distractors cause ~55% of total performance degradation in long-context reasoning. "
+    "Your goal: be selective. Approve injection only when memory provides DECISIVE benefit. "
+    "\n\n"
+    "OUTPUT FORMAT (strict): exactly one token — 'yes' to allow injection, 'no' to reject. "
+    "No punctuation, no explanation, no markdown, no quotes. Just yes or no.\n\n"
+    "ALLOW (yes) when the prompt:\n"
+    "- References past work, prior sessions, or earlier decisions ('the issue we discussed', 'remember when')\n"
+    "- Mentions specific file paths, module names, or code identifiers (e.g., 'recall.py', 'judge_relevance')\n"
+    "- Asks architecture/design questions ('how should we structure X', 'why did we choose Y')\n"
+    "- Queries project state ('what's the current X', 'where is Y at')\n"
+    "- Debugs in specific named code or systems\n"
+    "- Names a specific concept, library, framework, or term unique to the project\n\n"
+    "REJECT (no) when the prompt:\n"
+    "- Is a trivial acknowledgment ('ok', 'thanks', 'got it')\n"
+    "- Is conversational filler before next task ('alright let's continue')\n"
+    "- Is a pure syntax lookup with no project context ('what's the syntax for async/await')\n"
+    "- Asks a generic 'how do I X' question answerable from public knowledge alone\n"
+    "- Is a code task that can be answered by reading the current open file\n"
+    "- Mentions only common terms (variables, functions) without project-specific context\n\n"
+    "DECISION HEURISTICS:\n"
+    "- When uncertain between allow and reject, prefer ALLOW. Cost of false negative (lost "
+    "context, worse reasoning) > cost of false positive (wasted tokens, mild distractor risk).\n"
+    "- However, if the prompt is clearly a continuation phrase ('ok let me try that') with "
+    "no anchor to specific past work, reject.\n"
+    "- If the prompt mentions a proper noun or capitalized identifier, that's usually a "
+    "strong signal to allow (project entity, file, concept).\n"
+    "- Generic technical terms used in their dictionary meaning (e.g., 'database', 'function') "
+    "without project anchor do not warrant injection.\n\n"
+    "EDGE CASES:\n"
+    "- Vietnamese-English mixed prompts: treat the same — judge on intent, not language.\n"
+    "- Imperatives ('fix the bug', 'rename foo'): allow only if a specific named target is "
+    "referenced; reject if vague.\n"
+    "- Questions: allow if specific, reject if generic syntax/concept lookup.\n"
+    "- Multi-sentence prompts: judge on the dominant intent.\n\n"
+    "WORKED EXAMPLES:\n\n"
+    "Prompt: 'ok let me try recall.py fix'\n"
+    "Decision: yes — references specific file 'recall.py', indicates work continues on identified module\n\n"
+    "Prompt: 'fix the typo in line 5'\n"
+    "Decision: no — generic edit task, no project anchor, answerable from current open file\n\n"
+    "Prompt: 'what's the syntax for async/await in Python'\n"
+    "Decision: no — pure syntax lookup, public knowledge\n\n"
+    "Prompt: 'why did we choose sqlite-vec over chromadb'\n"
+    "Decision: yes — asks about a past architectural decision, names specific libraries\n\n"
+    "Prompt: 'tiếp tục với cách đó nhé'\n"
+    "Decision: no — pure conversational continuation, no anchor\n\n"
+    "Prompt: 'the bug in parser.py is in line 42'\n"
+    "Decision: yes — references specific file and location, project context useful\n\n"
+    "Prompt: 'thanks that worked'\n"
+    "Decision: no — pure acknowledgment\n\n"
+    "Prompt: 'update database schema this morning'\n"
+    "Decision: no — vague task with no specific anchor; 'database schema' is generic\n\n"
+    "Prompt: 'check IronCradle GDD status'\n"
+    "Decision: yes — names specific project entity and a specific document type\n\n"
+    "Prompt: 'rename foo to bar everywhere'\n"
+    "Decision: no — generic refactor, no project-specific context needed\n\n"
+    "Prompt: 'how should we structure the judge layer error handling'\n"
+    "Decision: yes — design question about a project-specific component\n\n"
+    "Prompt: 'compare React and Vue for our use case'\n"
+    "Decision: yes — strategic decision question with 'our use case' implying project context\n\n"
+    "Prompt: 'ok continue but check the recall.py logic'\n"
+    "Decision: yes — file reference plus contrastive 'but' marks substantive feedback\n\n"
+    "Prompt: 'add a print statement at the top'\n"
+    "Decision: no — trivial edit, no project context\n\n"
+    "Prompt: 'verify the auth flow works after my changes'\n"
+    "Decision: yes — references 'my changes' (past work) and a specific subsystem (auth flow)\n\n"
+    "Prompt: 'remove the unused import'\n"
+    "Decision: no — generic cleanup, no project context\n\n"
+    "Prompt: 'làm sao để tích hợp Stripe webhook vào project hiện tại'\n"
+    "Decision: yes — Vietnamese question that names specific service (Stripe) and 'project hiện tại'\n\n"
+    "REMEMBER: output exactly one token, either 'yes' or 'no'. Nothing else.\n\n"
+    "Now output yes or no for this prompt."
 )
 
 # Contrast markers signal substantive content even after ack phrase
@@ -243,7 +311,8 @@ def llm_classify(prompt: str) -> str | None:
             ],
             "temperature": 0,
             "seed": 42,
-            "max_tokens": 1,  # 'yes'/'no' tokenize to 1 token each in cl100k_base
+            "max_completion_tokens": 10,  # gpt-5.x outputs "Yes."/"No." ≈ 5 tokens
+            "service_tier": "flex",  # 50% discount, marginal latency variance
         }).encode()
         req = urllib.request.Request(
             "https://api.openai.com/v1/chat/completions",
