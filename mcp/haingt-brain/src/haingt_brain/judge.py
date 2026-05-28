@@ -201,6 +201,7 @@ def _chat_completion(
     messages: list[dict],
     timeout: float,
     model: str | None = None,
+    force_tier: str | None = None,
 ) -> tuple[dict | None, str]:
     """POST to OpenAI chat completions via urllib. Returns (response_dict, status).
 
@@ -221,7 +222,7 @@ def _chat_completion(
         "temperature": 0,
         "seed": 42,
     }
-    tier = _service_tier()
+    tier = force_tier if force_tier is not None else _service_tier()
     if tier and tier != "default":
         payload["service_tier"] = tier
     body = json.dumps(payload).encode()
@@ -330,13 +331,18 @@ def judge_relevance(
     import time
     t0 = time.perf_counter()
 
-    raw_resp, status = _chat_completion(
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        timeout=10.0,
-    )
+    msgs = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": user_prompt},
+    ]
+    used_flex = _service_tier() == "flex"
+    raw_resp, status = _chat_completion(messages=msgs, timeout=10.0)
+    # Flex tier is best-effort (50% off) → transient api_error/timeout/rate_limit
+    # under load. Retry once on the reliable default tier before falling to RRF.
+    if status in (STATUS_API_ERROR, STATUS_TIMEOUT, STATUS_RATE_LIMIT) and used_flex:
+        raw_resp, status = _chat_completion(messages=msgs, timeout=10.0, force_tier="default")
+        if status == STATUS_OK:
+            used_flex = False  # retry billed at full default-tier price
     telemetry["latency_ms"] = int((time.perf_counter() - t0) * 1000)
 
     if status != STATUS_OK:
@@ -364,7 +370,7 @@ def judge_relevance(
     # Telemetry — apply Flex discount if service_tier=flex
     usage = raw_resp.get("usage") or {}
     if usage.get("prompt_tokens"):
-        flex_active = _service_tier() == "flex"
+        flex_active = used_flex
         telemetry["tokens_in"] = usage["prompt_tokens"]
         telemetry["tokens_out"] = usage.get("completion_tokens", 0)
         telemetry["cost_usd"] = estimate_cost_usd(
@@ -467,13 +473,22 @@ def bump_telemetry(conn, telemetry: dict, status: str) -> None:
                                           WHERE key='judge_tokens_total'), 0) + ? AS TEXT))""",
                 (tin + tout,),
             )
-        # Fallback counter
+        # Fallback counter (+ per-reason breakdown so api_error can be told
+        # apart from benign min_candidates skips)
         if status != STATUS_OK:
             conn.execute(
                 """INSERT OR REPLACE INTO brain_meta (key, value)
                    VALUES ('judge_fallback_total',
                            CAST(COALESCE((SELECT CAST(value AS INTEGER) FROM brain_meta
                                           WHERE key='judge_fallback_total'), 0) + 1 AS TEXT))"""
+            )
+            reason = status.split(":", 1)[-1]  # "fallback:api_error" -> "api_error"
+            fb_key = f"judge_fb_{reason}"
+            conn.execute(
+                """INSERT OR REPLACE INTO brain_meta (key, value)
+                   VALUES (?, CAST(COALESCE((SELECT CAST(value AS INTEGER) FROM brain_meta
+                                             WHERE key=?), 0) + 1 AS TEXT))""",
+                (fb_key, fb_key),
             )
         conn.commit()
     except Exception:
