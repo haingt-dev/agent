@@ -1,16 +1,14 @@
 # Claude Code — agent
 
 ## What This Is
-Infrastructure hub for Claude Code — global config, skills, and plugins.
+Claude Code **tooling repo** — the custom MCP server (haingt-brain), plugins, and project-bootstrap scripts. Global config (CLAUDE.md, settings.json, skills, brains) now lives **natively in `~/.claude/`** (backed up by workstation-setup's bundle) — it is no longer sourced from here.
 
 ## Project Structure
-- `global/` — Source of truth for `~/.claude/` (CLAUDE.md, skills/, settings.json, brains/ all symlinked out)
-- `bin/` — Hub scripts (bootstrap, registry audit/sync, shell aliases)
-- `plugins/` — Claude Code plugins (haint-core, godot-dev)
-- `mcp/haingt-brain/` — Custom MCP server (semantic memory + knowledge graph)
-- `templates/memory-bank/` — Bootstrap templates
+- `mcp/haingt-brain/` — Custom MCP server (semantic memory + knowledge graph). Launched via `~/.claude.json`; haint-core hooks call its venv.
+- `plugins/` — Claude Code plugins (haint-core, godot-dev). `haint-marketplace` source = this repo.
+- `bin/` — Hub scripts (bootstrap, registry audit/sync, shell aliases sourced from `~/.zshrc`).
+- `registry.json` — Reverse index of all projects.
 
 ## Rules
-- Changes to `global/CLAUDE.md` affect ALL projects — be careful
-- `global/brains/*.md` files are symlinked from `~/.claude/brains/` — keep filenames stable
-- Auto-memory lives in `~/.claude/projects/*/memory/` (Claude Code native) — backed up via recovery bundle, NOT by this repo
+- This repo hosts CODE (MCP, plugins, tooling), not the live Claude config. For global config edits → edit `~/.claude/` directly.
+- Auto-memory lives in `~/.claude/projects/*/memory/` (Claude Code native) — backed up via recovery bundle, NOT by this repo.

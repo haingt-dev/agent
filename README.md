@@ -4,15 +4,16 @@ A personal infrastructure layer for Claude Code — centralizing plugins, skills
 
 ## Why
 
-Claude Code is powerful but each project is an island. Configuration, skills, and memory are project-local by default. This hub creates a shared layer: global skills available everywhere, plugins that inject context at session start, a registry that tracks all projects, and templates for bootstrapping new ones.
+Claude Code is powerful but each project is an island. This hub provides the shared **code** layer: a brain MCP for cross-project memory, plugins that inject context at session start, a registry that tracks all projects, and bootstrapping for new ones. (Global config + skills live natively in `~/.claude/`.)
 
 ## Features
 
-- **Global skills**: `/alfred` (life scheduler), `/mentor`, `/gen-image`, `/story`, `/token-optimize`
 - **Plugins**: `haint-core` (session hooks, context injection), `godot-dev` (Godot workflows)
+- **Brain-powered memory** (haingt-brain MCP) for cross-project context
 - **Project registry** with drift detection
 - **Bootstrap script** for new projects
-- **Brain-powered memory** (haingt-brain MCP) for cross-project context
+
+> Global config + skills (`CLAUDE.md`, `settings.json`, `skills/`, `brains/`) live natively in `~/.claude/` — not in this repo.
 
 ---
 
@@ -27,11 +28,6 @@ Claude Code is powerful but each project is an island. Configuration, skills, an
 │   ├── ag-registry-audit.sh   # Full drift check: registry vs actual state
 │   └── shell-aliases.sh       # Shell shortcuts (source in ~/.zshrc)
 ├── registry.json              # Reverse index of all child projects
-├── global/                    # Source of truth for ~/.claude/ (symlinked out)
-│   ├── CLAUDE.md              # Global identity/values
-│   ├── brains/                # Shared cross-project context (e.g., indie-ecosystem.md)
-│   ├── skills/                # Global skills (alfred, mentor, ship, research, ...)
-│   └── settings.json
 ├── .claude/scripts/
 │   └── registry-check.sh      # SessionStart hook: lightweight drift alert
 ├── plugins/
@@ -39,7 +35,6 @@ Claude Code is powerful but each project is an island. Configuration, skills, an
 │   └── godot-dev/             # Godot plugin: gdformat, GDScript workflows
 ├── mcp/
 │   └── haingt-brain/          # Custom MCP server: semantic memory + knowledge graph
-├── memories/                  # Auto-memory storage (symlinked from ~/.claude/projects/*/memory)
 └── templates/
     └── .claudeignore          # Default ignore template for new projects
 ```
