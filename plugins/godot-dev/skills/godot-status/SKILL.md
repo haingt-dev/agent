@@ -15,7 +15,7 @@ Three modes, chosen from the argument (default = `check`):
 
 | Arg | When | What it does |
 |-----|------|--------------|
-| (none) / `check` | "where's this project at", `/godot-status` | Read STATUS.md + reconcile with live reality + report |
+| (none) / `check` [`--strict`] | "where's this project at", `/godot-status`, pre-commit | Read STATUS.md + reconcile with live reality + report. `--strict` exits non-zero on stale/missing — for git hooks. |
 | `init` | repo has no STATUS.md yet | Scaffold STATUS.md from what the repo already knows |
 | `update` | after real progress, or from `/wrap` | Refresh the auto/machine fields; leave human prose |
 
@@ -61,6 +61,19 @@ Why this shape: `STATUS.md` is the **at-a-glance dashboard**. Detailed milestone
 doc map lives in `docs/README.md`. STATUS **summarizes and links** — it must not duplicate them, or the copies
 drift. `health` is a fast traffic-light; `phase` / `milestone` / `updated` are the fields a cross-project query reads.
 
+### Derived vs judged (why it doesn't rot)
+
+A hand-kept dashboard rots when it mixes two kinds of field. Keep them separate (borrowed from IronCradle's
+derive-from-code board):
+
+- **Derived** — the machine owns these: `updated`, the Tests line, the Code-counts line, git-derived bits.
+  `update` writes them, `check` verifies them. Never hand-maintain them; they come from reality.
+- **Judged** — only a human sets these: `phase`, `health`, `milestone`, **Now** (next action + blockers), the
+  Design-readiness narrative. The repo can't infer them.
+
+`check` reconciles the judged claims against the derived reality and flags the gap. That split — machine-truth vs
+human-judgment — is what keeps the board honest without a heavyweight generator.
+
 ## Mode: check (default)
 
 A hand-written dashboard rots, so the value of `check` is reconciling it against the repo — never trusting it blindly.
@@ -93,6 +106,26 @@ Design: <readiness one-liner>
 
 Keep it scannable. The reader wants the phase, the next action, and "do the docs lie?" in five seconds.
 
+### Enforcing freshness — `check --strict` + pre-commit
+
+A board only stays honest if something *forces* it. `--strict` runs the bundled `scripts/status_check.py` — a
+plain, dependency-free check (STATUS.md exists + its `updated` isn't older than the newest **code** commit) that
+exits non-zero when stale. Claude can't run inside a git hook, so this script is the enforceable half (mirrors
+IronCradle's `derive_status.py --check`). Wire it into a repo via `init` (it copies the script to `tools/` and adds):
+
+```yaml
+# .pre-commit-config.yaml
+- repo: local
+  hooks:
+    - id: status-fresh
+      name: STATUS.md is fresh
+      entry: python3 tools/status_check.py
+      language: system
+      pass_filenames: false
+```
+
+Then any commit that changes code without bumping STATUS.md fails until you run `update`. That is the anti-rot guarantee.
+
 ## Mode: init
 
 For a repo with no STATUS.md. Aim for a *useful first draft from what the repo already knows* — not a blank template.
@@ -103,6 +136,9 @@ For a repo with no STATUS.md. Aim for a *useful first draft from what the repo a
 4. Write `docs/STATUS.md` in the convention, pre-filled from those signals.
 5. Where the repo can't tell you (true phase, the real next action, health), insert an explicit `<!-- TODO: confirm -->` so the human makes the judgment call. An honest gap beats a confident guess.
 6. Tell the user what you inferred vs. left as TODO, and suggest linking STATUS.md from `docs/README.md`.
+7. Offer to enable enforcement: copy the bundled `scripts/status_check.py` to the repo's `tools/status_check.py`
+   and add the pre-commit hook above, so STATUS.md can't silently fall behind code. Skip cleanly if the repo has
+   no pre-commit setup and the user doesn't want one.
 
 ## Mode: update
 
@@ -119,4 +155,8 @@ After real progress, or called by `/wrap` at session end.
   all-projects plugin painless.)
 - **Complements `check-gdd`, doesn't replace it.** `check-gdd` deep-compares code against the design doc;
   `godot-status` is the fast dashboard across git / tests / docs / memory.
+- **Enforcement vs. report split** (from IC): the rich reconcile + judgment is this skill (needs Claude); the
+  deterministic freshness gate is `scripts/status_check.py` (runs in pre-commit, no Claude). Heavy per-system
+  auto-generation (IC's `systems.toml` + a generator) is deliberately NOT ported — it only pays off at
+  many-systems scale; add it per-project later if a project outgrows the hand-kept board.
 - Never invent test results, counts, or a phase. An honest "unknown / no tests yet" is more useful than a confident wrong number.
