@@ -1,6 +1,6 @@
 {
   "name": "godot-dev",
-  "description": "Godot 4.x debugging and GDScript patterns — corrective lens, project conventions, and on-demand references for Wildtide and Chimera Protocol",
-  "version": "2.1.0",
+  "description": "Godot 4.x debugging, GDScript patterns, and standardized project status (docs/STATUS.md) — corrective lens, project conventions, on-demand references, and a status dashboard for Chimera Protocol and IronCradle",
+  "version": "2.2.0",
   "author": { "name": "Hai" }
 }
