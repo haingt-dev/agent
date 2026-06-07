@@ -490,6 +490,26 @@ def bump_telemetry(conn, telemetry: dict, status: str) -> None:
                                              WHERE key=?), 0) + 1 AS TEXT))""",
                 (fb_key, fb_key),
             )
+        # Latency ring buffer (last 100 non-zero samples) → enables p50/p95.
+        # latency_ms is set on the real API path incl. timeouts (the tail we
+        # care about); cache hits / disabled / min_candidates report 0 and skip.
+        lat = telemetry.get("latency_ms", 0)
+        if lat and lat > 0:
+            row = conn.execute(
+                "SELECT value FROM brain_meta WHERE key='judge_latency_samples'"
+            ).fetchone()
+            try:
+                samples = json.loads(row[0]) if row and row[0] else []
+                if not isinstance(samples, list):
+                    samples = []
+            except Exception:
+                samples = []
+            samples.append(int(lat))
+            samples = samples[-100:]
+            conn.execute(
+                "INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('judge_latency_samples', ?)",
+                (json.dumps(samples),),
+            )
         conn.commit()
     except Exception:
         pass

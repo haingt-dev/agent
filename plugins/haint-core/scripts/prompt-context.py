@@ -167,12 +167,23 @@ def get_prompt() -> str | None:
 # Continuation patterns are 5+ words because the ≤4-word gate already catches
 # pure-ack prompts. These patterns target continuations/imperatives that bypass
 # the word-count gate.
-SKIP_LOG = Path("/tmp/brain-skip.log")
-LLM_TIEBREAK_LOG = Path("/tmp/brain-llm-tiebreak.log")
+# Durable log dir — was /tmp (wiped on reboot → never accumulated a sample).
+# ~/.local/state matches XDG; survives reboots so fire-rate/latency build up.
+_LOG_DIR = Path.home() / ".local" / "state" / "haingt-brain"
+try:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+SKIP_LOG = _LOG_DIR / "brain-skip.log"
+LLM_TIEBREAK_LOG = _LOG_DIR / "brain-llm-tiebreak.log"
+JUDGE_LOG = _LOG_DIR / "brain-judge.log"  # hook-side judge latency/outcome
 
 # Hybrid Option 2: LLM tiebreaker config
 LLM_CLASSIFIER_MODEL = "gpt-5.4-nano"
-LLM_CLASSIFIER_TIMEOUT = 10.0  # generous — soft-fall to heuristic on timeout
+LLM_CLASSIFIER_TIMEOUT = 2.0  # synchronous pre-prompt gate — cap the tail, fall to heuristic
+# (was 10.0: on a flex stall this blocked the prompt up to the 10s hook budget.
+# Default-tier call measured ~1.2s from VN host, so 2.0s gives headroom to get
+# the answer while capping worst-case stall 5x lower. Revisit from baseline ms= logs.)
 # System prompt padded to ≥1024 tokens to trigger OpenAI prompt caching.
 # Cached prefix billed at 10% standard rate; cache TTL 5-10 min in-memory.
 LLM_CLASSIFIER_SYSTEM = (
@@ -297,7 +308,7 @@ def llm_classify(prompt: str) -> str | None:
     """LLM tiebreaker via urllib (matches embed_prompt pattern).
 
     Returns 'skip' / 'include' / None (on error or no API key).
-    Cost ~$0.00002/call, latency ~200-500ms (1s hard timeout).
+    Cost ~$0.00002/call, ~1.2s typical from VN host (2s hard timeout, default tier).
     """
     api_key = get_api_key()
     if not api_key:
@@ -312,7 +323,8 @@ def llm_classify(prompt: str) -> str | None:
             "temperature": 0,
             "seed": 42,
             "max_completion_tokens": 10,  # gpt-5.x outputs "Yes."/"No." ≈ 5 tokens
-            "service_tier": "flex",  # 50% discount, marginal latency variance
+            # default tier (not flex): synchronous gate needs predictable latency;
+            # cost delta ~$0.00001/call is noise at this volume.
         }).encode()
         req = urllib.request.Request(
             "https://api.openai.com/v1/chat/completions",
@@ -332,14 +344,25 @@ def llm_classify(prompt: str) -> str | None:
         return None
 
 
-def _log_llm_tiebreak(decision: str, heuristic: str, prompt: str) -> None:
-    """Log LLM tiebreaker decision for observability (skip OR include)."""
+def _log_llm_tiebreak(
+    decision: str, heuristic: str, prompt: str,
+    elapsed_ms: int = -1, outcome: str = "ok",
+) -> None:
+    """Log LLM tiebreaker decision + latency for observability (skip/include/fail).
+
+    Columns: ts, decision, heuristic=, outcome=, ms=, hash, preview.
+    `outcome=fail` rows (API error/timeout) carry the latency tail we most
+    need to see — log them too, not just successes.
+    """
     try:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
         prompt_preview = prompt.strip().replace("\n", " ")[:60]
         with LLM_TIEBREAK_LOG.open("a") as f:
-            f.write(f"{ts}\t{decision}\theuristic={heuristic}\t{prompt_hash}\t{prompt_preview}\n")
+            f.write(
+                f"{ts}\t{decision}\theuristic={heuristic}\toutcome={outcome}"
+                f"\tms={elapsed_ms}\t{prompt_hash}\t{prompt_preview}\n"
+            )
     except Exception:
         pass
 
@@ -388,16 +411,20 @@ def should_skip_brain(prompt: str) -> tuple[bool, str]:
             heuristic_name = name
             break
 
+    t0 = time.perf_counter()
     llm_decision = llm_classify(stripped)
+    llm_ms = int((time.perf_counter() - t0) * 1000)
 
     if llm_decision is None:
-        # API failed — trust heuristic alone
+        # API failed/timeout — trust heuristic alone. Log it: timeouts are
+        # exactly the latency tail we need visibility into.
+        _log_llm_tiebreak("fail", heuristic_name, prompt, llm_ms, outcome="fail")
         if heuristic_skip:
             return True, f"pattern:{heuristic_name}|llm_fail"
         return False, "default_include|llm_fail"
 
-    # Log every LLM tiebreaker decision for analysis
-    _log_llm_tiebreak(llm_decision, heuristic_name, prompt)
+    # Log every LLM tiebreaker decision for analysis (with latency)
+    _log_llm_tiebreak(llm_decision, heuristic_name, prompt, llm_ms, outcome="ok")
 
     # Both signals agree
     if heuristic_skip and llm_decision == "skip":
@@ -425,6 +452,23 @@ def _log_skip(reason: str, prompt: str) -> None:
             f.write(line)
     except Exception:
         pass  # observability never blocks the hook
+
+
+def _log_judge(status: str, telemetry: dict, n_candidates: int) -> None:
+    """Log hook-side judge outcome + latency.
+
+    This path (memory-injection judging on every qualifying prompt) is the
+    dominant judge-latency source yet is NOT captured by brain_meta telemetry,
+    which only tracks the MCP brain_recall path. Columns: ts, status, ms=, cache=, n=.
+    """
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ms = int(telemetry.get("latency_ms", 0))
+        cache_hit = telemetry.get("cache_hit", False)
+        with JUDGE_LOG.open("a") as f:
+            f.write(f"{ts}\t{status}\tms={ms}\tcache={cache_hit}\tn={n_candidates}\n")
+    except Exception:
+        pass
 
 
 def detect_project() -> str | None:
@@ -894,10 +938,12 @@ if __name__ == "__main__":
         # JUDGE_MIN_CANDIDATES (default 4) gates against tiny pools internally.
         if _HAS_JUDGE and len(new_general) > MAX_GENERAL_RESULTS:
             try:
-                judged, _judge_status, _ = _judge_relevance(
+                _n_cand = len(new_general)
+                judged, _judge_status, _judge_tele = _judge_relevance(
                     combined, new_general, n=MAX_GENERAL_RESULTS
                 )
                 new_general = judged
+                _log_judge(_judge_status, _judge_tele, _n_cand)
             except Exception:
                 pass  # keep RRF order on any unexpected error
         new_general = new_general[:MAX_GENERAL_RESULTS]  # top-K after dedup+judge

@@ -172,21 +172,7 @@ def brain_session_save(
     )
     conn.commit()
 
-    # Reflect trigger: compute session importance accumulator
     suggestions = []
-    if memory_ids:
-        try:
-            imp_rows = conn.execute(
-                f"SELECT importance FROM memories WHERE id IN ({','.join('?' * len(memory_ids))})",
-                memory_ids,
-            ).fetchall()
-            total_importance = sum(r["importance"] or 0.5 for r in imp_rows)
-            if total_importance > 3.0:
-                suggestions.append(
-                    "High-value session — consider /reflect to consolidate insights"
-                )
-        except Exception:
-            pass
 
     # P4: Session-end auto-consolidation — if this session created enough
     # similar memories, summarize them. Two guards:
