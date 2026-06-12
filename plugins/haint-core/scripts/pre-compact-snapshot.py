@@ -17,6 +17,7 @@ Sections (CC-aligned compact format):
 9. Optional Next Step           — last action signal or explicit "next step"
 """
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -28,11 +29,17 @@ from pathlib import Path
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
 MAX_MESSAGES = 20
 MAX_CONTENT_PER_MSG = 300
-MAX_SNAPSHOT_CHARS = 2500
-CONTEXT_WINDOW_DISPLAY = 80
-CONTEXT_WINDOW_MATCH = 400
+MAX_SNAPSHOT_CHARS = 3200
+CONTEXT_WINDOW_MATCH = 400          # keyword-overlap window for find_unsaved
 TAIL_MESSAGES = 8
-TAIL_CHAR_LIMIT = 60
+TAIL_CHAR_LIMIT = 120               # default word-boundary clip
+SENTENCE_SCAN = 200                 # chars scanned each side for sentence edges
+SIGNAL_DISPLAY_LIMIT = 180          # max length of one extracted signal line
+INTENT_LIMIT = 180
+CURRENT_WORK_LIMIT = 160
+NEXT_STEP_LIMIT = 140
+USER_MSG_LIMIT = 120
+DEDUP_WINDOW_MIN = 10               # suppress an identical snapshot saved within N min
 
 # ── Technical signal patterns ─────────────────────────────────────────────
 
@@ -158,6 +165,27 @@ def get_hook_input() -> dict | None:
         return None
 
 
+# Wrapper blocks Claude Code injects into the user turn that are NOT real intent.
+_NOISE_PREFIXES = (
+    "<command-name", "<command-message", "<command-args",
+    "<local-command", "caveat:",
+)
+
+
+def _clean_user_text(text: str) -> str:
+    """Drop system-reminder tails and slash-command/CLI wrapper blocks.
+
+    Returns "" when the content is pure tooling noise, so callers can skip it.
+    Keeps the real request that precedes an appended <system-reminder>.
+    """
+    if "<system-reminder>" in text:
+        text = text[: text.index("<system-reminder>")]
+    t = text.strip()
+    if not t or t.startswith(_NOISE_PREFIXES):
+        return ""
+    return t
+
+
 def parse_transcript(
     transcript_path: str,
 ) -> tuple[list[dict], list[dict], list[tuple[int, str]], list[str], list[tuple[int, str]]]:
@@ -205,7 +233,9 @@ def parse_transcript(
                             if msg_type == "assistant":
                                 chunks.append((line_num, text))
                             elif msg_type == "user":
-                                user_chunks.append((line_num, text))
+                                cleaned = _clean_user_text(text)
+                                if cleaned:
+                                    user_chunks.append((line_num, cleaned))
 
                         elif msg_type == "assistant" and item_type == "tool_use":
                             tool_name = item.get("name", "")
@@ -244,20 +274,23 @@ def parse_transcript(
                     if msg_type == "assistant":
                         chunks.append((line_num, content))
                     elif msg_type == "user":
-                        user_chunks.append((line_num, content))
+                        cleaned = _clean_user_text(content)
+                        if cleaned:
+                            user_chunks.append((line_num, cleaned))
                 else:
                     content = str(content)
 
-                # Build snapshot messages
-                if not content.strip() or content.startswith("<system-reminder>"):
-                    continue
-                if "<system-reminder>" in content:
-                    content = content[:content.index("<system-reminder>")]
-
+                # Build snapshot messages (tail conversation, user + assistant)
                 role = message.get("role", msg_type)
+                if role == "user":
+                    content = _clean_user_text(content)
+                elif "<system-reminder>" in content:
+                    content = content[:content.index("<system-reminder>")]
+                if not content.strip():
+                    continue
                 messages.append({
                     "role": role,
-                    "content": content[:MAX_CONTENT_PER_MSG],
+                    "content": content.strip()[:MAX_CONTENT_PER_MSG],
                 })
     except Exception:
         pass
@@ -272,6 +305,67 @@ def strip_code(text: str) -> str:
     return text
 
 
+# Sentence terminator: . ! ? followed by whitespace/end (or a newline on its own).
+SENTENCE_END_RE = re.compile(r"[.!?](?=\s|$)|\n")
+_WS_RE = re.compile(r"\s+")
+
+
+def _truncate(text: str, limit: int = TAIL_CHAR_LIMIT) -> str:
+    """Clip to `limit` at a word boundary with a single-char ellipsis.
+
+    Never cuts mid-word: snaps back to the last space (unless that would discard
+    more than ~40% of the budget, in which case a hard cut is accepted).
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    clipped = text[:limit]
+    sp = clipped.rfind(" ")
+    if sp > limit * 0.6:
+        clipped = clipped[:sp]
+    return clipped.rstrip(" ,;:.-—") + "…"
+
+
+def _sentence_window(
+    text: str, m_start: int, m_end: int, limit: int = SIGNAL_DISPLAY_LIMIT
+) -> str:
+    """Extract the complete sentence(s) surrounding a match — no mid-sentence cuts.
+
+    Expands from the match to the nearest sentence boundaries (within a bounded
+    scan radius), collapses whitespace, then word-clips to `limit`. A leading "…"
+    marks the rare case where the scan radius — not a real boundary — set the start.
+    """
+    lo = max(0, m_start - SENTENCE_SCAN)
+    hi = min(len(text), m_end + SENTENCE_SCAN)
+
+    # Sentence start: just past the last terminator before the match.
+    s = lo
+    for mt in SENTENCE_END_RE.finditer(text, lo, m_start):
+        s = mt.end()
+    while s < m_start and text[s] in " \t\n":
+        s += 1
+
+    # Sentence end: through the first terminator at/after the match end.
+    e = hi
+    mt = SENTENCE_END_RE.search(text, m_end, hi)
+    if mt:
+        e = mt.end()
+
+    sentence = _WS_RE.sub(" ", text[s:e]).strip()
+    if s == lo and lo > 0:
+        sentence = "…" + sentence
+    return _truncate(sentence, limit)
+
+
+def _first_sentence(text: str, limit: int) -> str:
+    """Return the first whole sentence of `text`, word-clipped to `limit`."""
+    clean = _WS_RE.sub(" ", text).strip()
+    mt = SENTENCE_END_RE.search(clean)
+    if mt and mt.end() <= int(limit * 1.5):
+        return _truncate(clean[: mt.end()], limit)
+    return _truncate(clean, limit)
+
+
 def _extract_signals(chunks: list[tuple[int, str]], patterns: list[tuple[re.Pattern, str]]) -> list[dict]:
     """Generic signal extractor. Returns candidates from chunks matching any pattern."""
     candidates = []
@@ -283,9 +377,7 @@ def _extract_signals(chunks: list[tuple[int, str]], patterns: list[tuple[re.Patt
                 if any(ln == line_num for ln in seen_lines):
                     continue
 
-                d_start = max(0, match.start() - CONTEXT_WINDOW_DISPLAY // 2)
-                d_end = min(len(text), match.end() + CONTEXT_WINDOW_DISPLAY // 2)
-                display = text[d_start:d_end].strip().replace("\n", " ")
+                display = _sentence_window(text, match.start(), match.end())
 
                 m_start = max(0, match.start() - CONTEXT_WINDOW_MATCH // 2)
                 m_end = min(len(text), match.end() + CONTEXT_WINDOW_MATCH // 2)
@@ -323,11 +415,7 @@ def extract_next_step(chunks: list[tuple[int, str]]) -> str | None:
     signals = _extract_signals(chunks, [(NEXT_STEP_SIGNALS, "next")])
     if not signals:
         return None
-    last = signals[-1]
-    ctx = last["context"]
-    if len(ctx) > TAIL_CHAR_LIMIT:
-        ctx = ctx[:TAIL_CHAR_LIMIT - 3] + "..."
-    return ctx
+    return _truncate(signals[-1]["context"], NEXT_STEP_LIMIT)
 
 
 def extract_entities_for_snapshot(chunks: list[tuple[int, str]]) -> dict:
@@ -371,13 +459,10 @@ def extract_entities_for_snapshot(chunks: list[tuple[int, str]]) -> dict:
 
 def extract_primary_intent(user_chunks: list[tuple[int, str]]) -> str | None:
     """Extract the primary request from the first few user messages."""
-    early = user_chunks[:3]
-    for _, text in early:
-        clean = text.strip().replace("\n", " ")
+    for _, text in user_chunks[:8]:
+        clean = _WS_RE.sub(" ", text).strip()
         if len(clean) > 10:
-            if len(clean) > TAIL_CHAR_LIMIT:
-                clean = clean[:TAIL_CHAR_LIMIT - 3] + "..."
-            return clean
+            return _first_sentence(clean, INTENT_LIMIT)
     return None
 
 
@@ -386,11 +471,9 @@ def extract_current_work(assistant_chunks: list[tuple[int, str]]) -> list[str]:
     recent = assistant_chunks[-3:] if len(assistant_chunks) >= 3 else assistant_chunks
     lines = []
     for _, text in recent:
-        clean = text.strip().replace("\n", " ")
+        clean = _WS_RE.sub(" ", strip_code(text)).strip()
         if len(clean) > 20:
-            if len(clean) > TAIL_CHAR_LIMIT:
-                clean = clean[:TAIL_CHAR_LIMIT - 3] + "..."
-            lines.append(clean)
+            lines.append(_first_sentence(clean, CURRENT_WORK_LIMIT))
     return lines
 
 
@@ -443,13 +526,6 @@ def find_unsaved(candidates: list[dict], saves: list[dict]) -> list[dict]:
     return unsaved
 
 
-def _truncate(text: str, limit: int = TAIL_CHAR_LIMIT) -> str:
-    """Truncate text to limit with ellipsis."""
-    if len(text) > limit:
-        return text[:limit - 3] + "..."
-    return text
-
-
 def build_structured_snapshot(
     technical: list[dict],
     errors: list[dict],
@@ -474,7 +550,7 @@ def build_structured_snapshot(
     # Section 2: Key Technical Concepts (decisions + discoveries — no errors)
     concept_sigs = [s for s in technical if s["type"] in ("decision", "discovery")]
     if concept_sigs:
-        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in concept_sigs[:5]]
+        lines = [f"- [{s['type']}] {s['context']}" for s in concept_sigs[:5]]
         parts.append("### 2. Key Technical Concepts\n" + "\n".join(lines))
 
     # Section 3: Files and Code Sections
@@ -492,13 +568,13 @@ def build_structured_snapshot(
 
     # Section 4: Errors and Fixes
     if errors:
-        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in errors[:5]]
+        lines = [f"- [{s['type']}] {s['context']}" for s in errors[:5]]
         parts.append("### 4. Errors and Fixes\n" + "\n".join(lines))
 
     # Section 5: Problem Solving (technical remainder — not decisions/discoveries)
     ps_sigs = [s for s in technical if s["type"] == "technical"]
     if ps_sigs:
-        lines = [f"- [{s['type']}] {_truncate(s['context'])}" for s in ps_sigs[:5]]
+        lines = [f"- [{s['type']}] {s['context']}" for s in ps_sigs[:5]]
         parts.append("### 5. Problem Solving\n" + "\n".join(lines))
 
     # Section 6: All User Messages (conversation tail — user side only)
@@ -508,13 +584,13 @@ def build_structured_snapshot(
         if tail:
             lines = []
             for msg in tail:
-                content = msg["content"].strip().replace("\n", " ")
-                lines.append(f"- {_truncate(content)}")
+                content = _WS_RE.sub(" ", msg["content"]).strip()
+                lines.append(f"- {_truncate(content, USER_MSG_LIMIT)}")
             parts.append(f"### 6. All User Messages (last {len(tail)})\n" + "\n".join(lines))
 
     # Section 7: Pending Tasks
     if actions:
-        lines = [f"- {_truncate(s['context'])}" for s in actions[:5]]
+        lines = [f"- {s['context']}" for s in actions[:5]]
         # Add entity context if useful
         entity_hints = []
         if entities.get("projects"):
@@ -546,24 +622,65 @@ def build_structured_snapshot(
     if not next_step and actions:
         # Fall back to last action signal
         last_action = actions[-1]
-        next_step = _truncate(last_action["context"])
+        next_step = _truncate(last_action["context"], NEXT_STEP_LIMIT)
     if next_step:
         parts.append(f"### 9. Optional Next Step\n- {next_step}")
 
     snapshot = "\n\n".join(parts)
     if len(snapshot) > MAX_SNAPSHOT_CHARS:
-        snapshot = snapshot[:MAX_SNAPSHOT_CHARS] + "\n[...truncated]"
+        # Cut at the last section boundary before the cap so we never end
+        # the snapshot on a half-written line.
+        cut = snapshot.rfind("\n\n", 0, MAX_SNAPSHOT_CHARS)
+        if cut < MAX_SNAPSHOT_CHARS // 2:
+            cut = MAX_SNAPSHOT_CHARS
+        snapshot = snapshot[:cut].rstrip() + "\n\n[...truncated]"
     return snapshot
 
 
-def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool:
-    """Write structured snapshot to brain.db (no MCP needed)."""
+def _content_fingerprint(snapshot: str) -> str:
+    """Hash the snapshot body, excluding the volatile header timestamp line.
+
+    Two compacts firing seconds apart capture the same conversation state but
+    differ in the minute-resolution header; hashing the body lets the dedup
+    guard recognize them as identical.
+    """
+    body = snapshot.split("\n", 1)[1] if "\n" in snapshot else snapshot
+    return hashlib.sha256(body.strip().encode("utf-8")).hexdigest()[:16]
+
+
+def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool | str:
+    """Write structured snapshot to brain.db (no MCP needed).
+
+    Returns True on save, "duplicate" when an identical snapshot was written in
+    the last DEDUP_WINDOW_MIN minutes (two compacts seconds apart), or False on
+    failure. Snapshots are intentionally vector-less: they are short-lived
+    working memory (TTL-purged at 14d, found via FTS5 + SessionStart), so an
+    embedding round-trip would add latency and a failure mode to the compaction
+    path for marginal recall value.
+    """
     if not DB_PATH.exists():
         return False
 
     try:
         conn = sqlite3.connect(str(DB_PATH))
         conn.row_factory = sqlite3.Row
+
+        fingerprint = _content_fingerprint(snapshot)
+
+        # Dedup guard: a near-simultaneous re-compact would otherwise double-save
+        # the same state. Best-effort — never let it block a legitimate save.
+        try:
+            dup = conn.execute(
+                "SELECT id FROM memories WHERE type='session' "
+                "AND created_at > datetime('now', ?) "
+                "AND json_extract(metadata, '$.content_hash') = ? LIMIT 1",
+                (f"-{DEDUP_WINDOW_MIN} minutes", fingerprint),
+            ).fetchone()
+        except sqlite3.Error:
+            dup = None
+        if dup:
+            conn.close()
+            return "duplicate"
 
         memory_id = uuid.uuid4().hex[:12]
         tags = json.dumps(["pre-compact", "auto-snapshot", "structured"])
@@ -572,6 +689,7 @@ def save_to_brain(snapshot: str, project: str | None, counts: dict) -> bool:
             "source": source,
             "format": "structured-v2",
             "counts": counts,
+            "content_hash": fingerprint,
         })
 
         # Compute importance from type × source
@@ -617,10 +735,7 @@ def format_output(counts: dict, unsaved: list[dict], message_count: int) -> str:
         items = unsaved[:3]
         lines = []
         for item in items:
-            ctx = item["context"]
-            if len(ctx) > 60:
-                ctx = ctx[:57] + "..."
-            lines.append(f"  - [{item['type']}] {ctx}")
+            lines.append(f"  - [{item['type']}] {_truncate(item['context'], 80)}")
         msg += "\nPotentially unsaved:\n" + "\n".join(lines)
         if len(unsaved) > 3:
             msg += f"\n  ...and {len(unsaved) - 3} more"
@@ -632,49 +747,77 @@ def format_output(counts: dict, unsaved: list[dict], message_count: int) -> str:
 FALLBACK_MSG = "Context approaching limit. Use brain_save for any unsaved decisions/discoveries before compaction."
 
 
-def _detect_project(transcript_path: str | None) -> str | None:
-    """Derive project name from transcript path instead of cwd (hook cwd != session cwd)."""
+def _session_cwd(hook_input: dict | None) -> Path | None:
+    """Resolve the real session cwd, with original underscores intact.
+
+    Primary source: the hook payload's `cwd` field — the canonical session
+    directory, identical to prompt-context.py's `Path.cwd()`, so the dedup-cache
+    md5 lines up exactly.
+
+    Fallback (cwd missing or unexpanded): derive from the transcript directory
+    name. Claude Code mangles it by replacing '_' with '-'
+    (Learning_English -> -home-haint-Projects-Learning-English); the mangling is
+    lossy and not reversible from the name alone, so recover the real directory
+    by probing the filesystem.
+    """
+    if hook_input:
+        cwd = hook_input.get("cwd")
+        if cwd and Path(cwd).is_dir():
+            return Path(cwd)
+
+    transcript_path = hook_input.get("transcript_path") if hook_input else None
     if not transcript_path:
         return None
-    # Path format: ~/.claude/projects/-home-haint-Projects-{project}/xxx.jsonl
     dir_name = Path(transcript_path).parent.name
     marker = "Projects-"
     idx = dir_name.find(marker)
-    if idx >= 0:
-        return dir_name[idx + len(marker):]
-    return None
+    if idx < 0:
+        return None
+    mangled = dir_name[idx + len(marker):]
+    base = Path.home() / "Projects"
+    if (base / mangled).is_dir():            # hyphen was real (e.g. digital-identity)
+        return base / mangled
+    alt = base / mangled.replace("-", "_")   # recover Learning_English / Idea_Vault
+    if alt.is_dir():
+        return alt
+    return base / mangled                     # last resort: name as-derived
 
 
-def _reset_prompt_cache(transcript_path: str | None) -> None:
-    """Reset prompt-context dedup cache for this session.
+def _detect_project(cwd: Path | None) -> str | None:
+    """Project scope = the session directory's basename (underscores preserved)."""
+    return cwd.name if cwd else None
 
-    Compact wipes all system-reminders from context window, so dedup IDs,
-    token caps, and tool state must reset to allow re-injection.
 
-    Cache file is keyed by md5(cwd)[:8]. Reconstruct cwd from project name
-    since hook cwd != session cwd.
+def _reset_prompt_cache(cwd: Path | None) -> None:
+    """Reset prompt-context's per-session dedup cache after a compaction.
+
+    Compact wipes every system-reminder from the context window, so the dedup
+    IDs, token caps, and tool state cached by prompt-context.py must be cleared
+    to re-enable injection. The cache file is keyed by md5(str(cwd))[:8] — the
+    SAME key prompt-context.py derives from Path.cwd() — so deleting it forces a
+    clean re-inject. A mangled (hyphenated) cwd would miss the file and silently
+    leave the next session's memories un-reinjected.
     """
-    import hashlib
-    project = _detect_project(transcript_path)
-    if not project:
+    if not cwd:
         return
-    session_cwd = str(Path.home() / "Projects" / project)
-    cwd_hash = hashlib.md5(session_cwd.encode()).hexdigest()[:8]
-    cache_file = Path(f"/tmp/brain-prompt-ctx-{cwd_hash}.json")
-    cache_file.unlink(missing_ok=True)
+    cwd_hash = hashlib.md5(str(cwd).encode()).hexdigest()[:8]
+    Path(f"/tmp/brain-prompt-ctx-{cwd_hash}.json").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
     hook_input = get_hook_input()
     transcript_path = hook_input.get("transcript_path") if hook_input else None
+    cwd = _session_cwd(hook_input)
 
     if not transcript_path:
+        _reset_prompt_cache(cwd)  # compaction happens regardless of snapshot
         print(FALLBACK_MSG)
         sys.exit(0)
 
     # Step 1: Single-pass transcript parse (extended return values)
     messages, brain_saves, assistant_chunks, file_paths, user_chunks = parse_transcript(transcript_path)
     if not messages:
+        _reset_prompt_cache(cwd)
         print(FALLBACK_MSG)
         sys.exit(0)
 
@@ -688,7 +831,7 @@ if __name__ == "__main__":
     unsaved_technical = find_unsaved(technical, brain_saves)
 
     # Step 4: Build structured snapshot
-    project = _detect_project(transcript_path)
+    project = _detect_project(cwd)
 
     entity_count = sum(len(v) for v in entities.values())
     counts = {
@@ -713,13 +856,15 @@ if __name__ == "__main__":
     )
 
     # Step 5: Save to brain
-    saved = save_to_brain(snapshot, project, counts) if snapshot else False
+    result = save_to_brain(snapshot, project, counts) if snapshot else False
 
     # Step 6: Reset prompt-context cache (compact wipes system-reminders)
-    _reset_prompt_cache(transcript_path)
+    _reset_prompt_cache(cwd)
 
     # Step 7: Output
-    if saved:
+    if result == "duplicate":
+        print("Pre-compact snapshot skipped — identical to one saved minutes ago (dedup).")
+    elif result:
         print(format_output(counts, unsaved_technical, len(messages)))
     else:
         print(FALLBACK_MSG)

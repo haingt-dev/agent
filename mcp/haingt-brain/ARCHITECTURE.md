@@ -1,10 +1,20 @@
 # haingt-brain — Architecture Document
 
-> Last updated: 2026-06-12 (system audit — see §0)
-> Version: v4.1.0 (+ 2026-06-12 audit patches)
+> Last updated: 2026-06-13 (pre-compact-snapshot.py audit — see §0aa)
+> Version: v4.1.0 (+ 2026-06-12 audit patches + 2026-06-13 pre-compact fixes)
 > Status: Production (single-user, daily use)
 > Origin: Applied concepts from DeepLearning.AI "Building Memory-Aware Agents" course
 > Maintenance: before trusting any section, verify against `hooks/hooks.json` + `ls src/haingt_brain/` — the 2026-06-12 audit found 14 drift points in the 04-02 version.
+
+## 0aa. Changelog — 2026-06-13 (pre-compact-snapshot.py — last unaudited hook)
+
+The one file the 2026-06-12 audit deferred is now audited + fixed (regression suite `plugins/haint-core/scripts/test_pre_compact_snapshot.py`, 12/12; brain pytest still 98/98). It runs on every PreCompact, writing a 9-section `type=session` snapshot direct to brain.db.
+
+- **Underscore-project corruption (root cause of the `Learning-English`→`Learning_English` scope migration the 2026-06-12 cleanup had to run)**: project scope was derived from the transcript dir name, which Claude Code mangles `_`→`-` (`Learning_English` → `-home-haint-Projects-Learning-English`). Snapshots for `Learning_English`/`Idea_Vault` saved under the wrong (hyphenated) scope. Fixed: resolve cwd from the hook payload's `cwd` field (canonical, underscores intact); a filesystem-probing fallback recovers the real dir when `cwd` is absent.
+- **Dedup-cache miss after compact → next session's memories silently not re-injected**: `_reset_prompt_cache` rebuilt the cwd from the mangled project name, so `md5(cwd)[:8]` didn't match prompt-context.py's key (computed from the real `Path.cwd()`). For underscore projects the unlink missed; the surviving cache made prompt-context believe the prior session's memories were still in context and skip re-injection. Now keyed off the real cwd (verified `md5(/home/haint/Projects/agent)[:8] == bf884550` == the live cache file). Cache reset also now fires on every compaction path, including the empty-transcript early-exits.
+- **Mid-sentence fragments (9/10 sampled snapshots)**: signal context was a raw ±40-char window then a mid-word `text[:limit-3]` cut — fragmented at both ends. Replaced with sentence-aware extraction (`_sentence_window` snaps to sentence boundaries within a bounded scan radius) + word-boundary `_truncate`; intent / current-work / next-step now take the first whole sentence. Per-line budget raised (60→120–180), snapshot cap 2500→3200 and cut at a section boundary instead of mid-line.
+- **Double-save guard**: two compacts seconds apart (observed pair 29s apart) double-saved the same state, and snapshots are dedup-invisible to the cosine pool (no embedding). Added a content-hash guard (sha256 of the snapshot body minus the volatile header timestamp line, stored in `metadata.content_hash`) that skips an identical save within 10 min. Embeddings intentionally NOT added — these are TTL-14d working memory found via FTS5 + SessionStart; an embedding round-trip would add latency and a failure mode to the compaction path for marginal recall value.
+- **Input hygiene**: primary intent and the user-messages section were polluted by `<system-reminder>` / `<command-*>` wrapper blocks; `_clean_user_text` strips them per content-item so intent reflects the real first request.
 
 ## 0a. Changelog — 2026-06-12 audit phase 2 (server + hooks hardening)
 
@@ -18,7 +28,7 @@ Phase-2 audit (3 more dimensions: deep server code, injection eval, transcript u
 - **Hook injection quality** (prompt-context.py): LLM gate rebalanced with life-domain ALLOW examples (was 97.8% skip-biased — blocked career/schedule/Upwork/vaccine prompts); ≤4-word skip exempts path/code tokens; tool search inverted to vector-primary with cosine floor 0.35 (calibrated: true matches 0.435+, noise ≤0.312; old FTS-first path produced 91%-never-followed suggestions) + once-per-session suggestion set + flattened/word-clipped content + tool access telemetry; memory FTS leg uses full-prompt content words (was first-5-words of first-100-chars); judge runs for small pools (≥2); injected memories carry '(Nd ago)' age labels.
 - **SessionStart** (brain-context.py): semantic dedup across sections via dedup_pool; decisions over-fetch 6→3; `compact` source emits hot-tier only (one 7-week session had accumulated 77 near-identical full blocks).
 - **Misc**: `_load_env` always parses .env (exported OPENAI_API_KEY used to silently disable the judge); importance backfill one-shot via brain_meta flag (ran on every connect forever); dry-run consolidation no longer makes paid LLM calls; weekly cron runner TTL-purges pre-compact snapshots >14d (they are vector-less and dedup-invisible by design); index_tools word-boundary clip.
-- **Deferred** (known, low-priority): hybrid_search filters still apply after top-20 candidate selection (affects narrow filtered recalls); anaphoric continuation prompts ("Chốt B…") still retrieve without the referent (needs assistant-tail blending); hook-side judge spend not counted against the daily budget; pre-compact-snapshot.py internals still the one unaudited file (blast radius now TTL-bounded).
+- **Deferred** (known, low-priority): hybrid_search filters still apply after top-20 candidate selection (affects narrow filtered recalls); anaphoric continuation prompts ("Chốt B…") still retrieve without the referent (needs assistant-tail blending); hook-side judge spend not counted against the daily budget. *(pre-compact-snapshot.py internals — resolved 2026-06-13, see §0aa.)*
 
 ## 0. Changelog — 2026-06-12 full-system audit
 
