@@ -41,12 +41,12 @@
       ],
       "notes": "Media/video production workflow. Custom Bash hook for large media warnings."
     },
-    "chimera-protocol": {
-      "path": "~/Projects/chimera-protocol",
+    "chimera": {
+      "path": "~/Projects/chimera",
       "type": "godot",
       "status": "active",
       "bootstrapped": true,
-      "summary": "2D pixel art Action-RPG/Metroidvania in Godot 4.5 — parasitic mutation mechanics",
+      "summary": "Adult (18+) metroidvania in Godot 4.6 — codename Chimera, shipping title 'The Ninth Bride'. PRIMARY BUILD (pivot from IronCradle). Pre-production / art-gate.",
       "plugins": [
         "godot-dev"
       ],
