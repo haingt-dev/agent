@@ -196,7 +196,7 @@ def brain_session(
     elif action == "save":
         if not summary:
             return json.dumps({"error": "summary is required for 'save'"})
-        result = _session_save(conn, session_id, summary, decisions, discoveries, entities)
+        result = _session_save(conn, session_id, summary, decisions, discoveries, entities, project)
     elif action == "status":
         result = _session_status(conn)
     elif action == "consolidate":

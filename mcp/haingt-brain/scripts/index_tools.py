@@ -180,11 +180,18 @@ def _parse_skill(path: Path) -> dict | None:
         if desc_match:
             result["description"] = desc_match.group(1).strip().strip('"\'')
 
-    # Extract body context: first ~300 chars after frontmatter for richer search signal
+    # Extract body context: first ~300 chars after frontmatter for richer search
+    # signal. Word-boundary cut — mid-word truncation shipped broken sentences
+    # into every injection of the tool (audit 2026-06-12).
     if body:
         # Strip markdown headers for cleaner text
         body_clean = re.sub(r'^#+\s+', '', body, flags=re.MULTILINE)
-        result["body_context"] = body_clean[:300].strip()
+        snippet = body_clean[:300].strip()
+        if len(body_clean) > 300:
+            cut = snippet.rfind(" ")
+            if cut > 150:
+                snippet = snippet[:cut]
+        result["body_context"] = snippet
 
     if "name" in result and "description" in result:
         return result

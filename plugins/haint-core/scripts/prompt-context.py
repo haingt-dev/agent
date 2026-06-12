@@ -55,6 +55,11 @@ MIN_PROMPT_LENGTH = 10
 # Tool search config
 FETCH_K_TOOLS = 10  # over-fetch for dedup-free re-ranking
 MAX_TOOL_RESULTS = 3  # top-3 tools per prompt
+TOOL_VEC_FETCH_K = 400  # KNN cannot pre-filter type='tool' (~7% of vectors) —
+                        # k=50 starved the filter to 0-2 rows (audit 2026-06-12)
+TOOL_MIN_COSINE = 0.35  # relevance floor — calibrated 2026-06-12: true matches
+                        # measured 0.435-0.438, observed noise <= 0.312
+MAX_SUGGESTED_TOOLS = 40  # session-level once-per-tool suggestion cap
 
 # Token budget caps
 MAX_INJECTED_CHARS = 3000  # ~750 tokens, general memories across session
@@ -217,7 +222,11 @@ LLM_CLASSIFIER_SYSTEM = (
     "- Asks architecture/design questions ('how should we structure X', 'why did we choose Y')\n"
     "- Queries project state ('what's the current X', 'where is Y at')\n"
     "- Debugs in specific named code or systems\n"
-    "- Names a specific concept, library, framework, or term unique to the project\n\n"
+    "- Names a specific concept, library, framework, or term unique to the project\n"
+    "- Touches the user's LIFE domains where memory holds rich context: career direction, "
+    "weekly scheduling/planning, family (Sa, Duyên), health/vaccines, finances, Upwork "
+    "proposals/jobs, game-dev build (Chimera / The Ninth Bride). These are memory-HEAVY "
+    "domains: prior decisions, preferences, and patterns exist for almost all of them.\n\n"
     "REJECT (no) when the prompt:\n"
     "- Is a trivial acknowledgment ('ok', 'thanks', 'got it')\n"
     "- Is conversational filler before next task ('alright let's continue')\n"
@@ -275,6 +284,14 @@ LLM_CLASSIFIER_SYSTEM = (
     "Decision: no — generic cleanup, no project context\n\n"
     "Prompt: 'làm sao để tích hợp Stripe webhook vào project hiện tại'\n"
     "Decision: yes — Vietnamese question that names specific service (Stripe) and 'project hiện tại'\n\n"
+    "Prompt: 'mình đang phân vân về hướng đi career'\n"
+    "Decision: yes — career direction is a memory-heavy life domain (prior decisions, roadmap, preferences)\n\n"
+    "Prompt: 'lên lịch tuần này giúp mình'\n"
+    "Decision: yes — scheduling pulls from stored commitments, family context, and work threads\n\n"
+    "Prompt: 'viết proposal cho job Upwork về backend python'\n"
+    "Decision: yes — Upwork proposals have stored style preferences and past patterns\n\n"
+    "Prompt: 'hôm nay Sa tiêm vaccine gì'\n"
+    "Decision: yes — family health question; vaccine history lives in memory\n\n"
     "REMEMBER: output exactly one token, either 'yes' or 'no'. Nothing else.\n\n"
     "Now output yes or no for this prompt."
 )
@@ -406,7 +423,16 @@ def should_skip_brain(prompt: str) -> tuple[bool, str]:
             return True, f"confident:{name}"
     words = stripped.split()
     if len(words) <= 4 and "?" not in stripped:
-        return True, "trivial_short"
+        # Path/code tokens mark a real task, not an ack — 'fix bug trong
+        # scripts/derive.sh' is 4 words but path-anchored (audit 2026-06-12).
+        # Route those to the ambiguous zone instead of confidently skipping.
+        has_code_token = any(
+            "/" in w or "_" in w or "::" in w or "()" in w
+            or ("." in w.strip(".,!") and not w.strip(".,!").replace(".", "").isdigit())
+            for w in words
+        )
+        if not has_code_token:
+            return True, "trivial_short"
     if len(words) > SUBSTANTIVE_WORD_THRESHOLD:
         return False, "substantive_length"
     lower = stripped.lower()
@@ -573,6 +599,38 @@ def load_tool_chars() -> int:
     return _load_cache().get("tool_chars", 0)
 
 
+def load_suggested_tools() -> set[str]:
+    """Session-level set of tool names already suggested (once per session —
+    the same list was re-suggested up to 27x/session, audit 2026-06-12)."""
+    return set(_load_cache().get("suggested_tools", []))
+
+
+def _flatten_clip(text: str, limit: int = 200) -> str:
+    """One line, word-boundary clip — raw multi-line tool bodies rendered
+    nested markdown bullets as phantom sibling tools (audit 2026-06-12)."""
+    flat = " ".join(text.split())
+    if len(flat) <= limit:
+        return flat
+    cut = flat.rfind(" ", 0, limit)
+    if cut < limit // 2:
+        cut = limit
+    return flat[:cut] + "…"
+
+
+def _age_suffix(date_str: str | None) -> str:
+    """' (Nd ago)' for memories 2+ days old — a 68-day-old 'weekend plan'
+    injected dateless reads as current state (audit 2026-06-12)."""
+    if not date_str:
+        return ""
+    try:
+        age_days = (datetime.now() - datetime.fromisoformat(date_str)).days
+        if age_days >= 2:
+            return f" ({age_days}d ago)"
+    except Exception:
+        pass
+    return ""
+
+
 def save_cache(
     new_ids: set[str],
     current_prompt: str,
@@ -594,6 +652,12 @@ def save_cache(
         # Tool state
         last_tools = tool_names if tool_names is not None else cache.get("last_tools", [])
         tool_chars = cache.get("tool_chars", 0) + new_tool_chars
+        # Session-level suggested-tools set (once per session)
+        suggested = cache.get("suggested_tools", [])
+        for name in (tool_names or []):
+            if name not in suggested:
+                suggested.append(name)
+        suggested = suggested[-MAX_SUGGESTED_TOOLS:]
         # General memory IDs for skip-if-unchanged
         last_memory_ids = memory_ids if memory_ids is not None else cache.get("last_memory_ids", [])
         # Extract and accumulate keywords (deduped, capped)
@@ -613,6 +677,7 @@ def save_cache(
             "total_chars": total_chars,
             "last_tools": last_tools,
             "tool_chars": tool_chars,
+            "suggested_tools": suggested,
             "last_memory_ids": last_memory_ids,
             "ts": time.time(),
         }))
@@ -698,13 +763,16 @@ def _fts_search(
     conn: sqlite3.Connection, prompt: str, project: str | None
 ) -> list[dict]:
     """FTS5 keyword search for general memories with project scoping."""
-    words = prompt[:100].split()
+    # Content words from the whole prompt (capped) — the old prompt[:100] +
+    # first-5-words cut Vietnamese prompts down to function words and produced
+    # keyword-bait matches like 'intro' -> Upwork-intro (audit 2026-06-12)
+    words = prompt[:CURRENT_PROMPT_MAX_CHARS].split()
     words = [w.strip(",.!?;:'\"()[]{}") for w in words]
     query_words = [w for w in words if len(w) > 2 and w.isalnum()]
     if not query_words:
         return []
 
-    fts_query = " OR ".join(query_words[:5])
+    fts_query = " OR ".join(query_words[:8])
     try:
         rows = conn.execute(
             """SELECT m.id, m.content, m.type, m.created_at, m.importance, rank
@@ -828,7 +896,7 @@ def search_general_hybrid(
     ranked = sorted(scores.values(), key=lambda x: (-x["score"], -x.get("importance", 0.5)))
     return [
         {"id": r["id"], "content": r["content"][:MAX_CONTENT_LEN], "type": r["type"],
-         "importance": r.get("importance", 0.5)}
+         "importance": r.get("importance", 0.5), "created_at": r.get("created_at", "")}
         for r in ranked[:FETCH_K_GENERAL]
     ]
 
@@ -838,7 +906,13 @@ def search_general_hybrid(
 def search_tools_vector(
     conn: sqlite3.Connection, embedding: list[float], project: str | None = None
 ) -> list[dict]:
-    """Vector similarity search for tool memories (Semantic Toolbox). Returns with IDs."""
+    """Vector similarity search for tool memories (Semantic Toolbox).
+
+    Oversamples the KNN heavily (TOOL_VEC_FETCH_K) because sqlite-vec cannot
+    pre-filter by type and tool vectors are ~7% of the table, then applies a
+    cosine relevance floor — suggesting nothing beats suggesting noise
+    (measured 91% never-followed suggestions, audit 2026-06-12).
+    """
     emb_bytes = struct.pack(f"{len(embedding)}f", *embedding)
     project_filter = "AND (m.project = :project OR m.project IS NULL)" if project else ""
     try:
@@ -856,16 +930,21 @@ def search_tools_vector(
             {project_filter}
             ORDER BY v.distance
             LIMIT :limit""",
-            {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "limit": FETCH_K_TOOLS, "project": project},
+            {"embedding": emb_bytes, "fetch_k": TOOL_VEC_FETCH_K, "limit": FETCH_K_TOOLS, "project": project},
         ).fetchall()
 
         results = []
         for r in rows:
+            # Normalized embeddings: cosine = 1 - L2distance^2 / 2
+            cosine = 1.0 - (r["distance"] ** 2) / 2.0
+            if cosine < TOOL_MIN_COSINE:
+                continue
             meta = json.loads(r["metadata"]) if r["metadata"] else {}
             results.append({
                 "id": r["id"],
                 "name": meta.get("name", "unknown"),
                 "content": r["content"],
+                "cosine": round(cosine, 3),
             })
         return results
     except Exception:
@@ -883,12 +962,13 @@ def _fts5_tool_search(
     """
     # Sanitize query for FTS5 (remove special chars that break MATCH syntax)
     safe_query = re.sub(r'[^\w\s]', ' ', query)
-    words = safe_query.split()
+    # Content words from the WHOLE prompt — the old first-5-raw-words query
+    # matched on function words and the word 'save' alone (audit 2026-06-12)
+    words = [w for w in safe_query.split() if len(w) >= MIN_WORD_LEN]
     if not words:
         return []
 
-    # Build FTS5 OR query from first 5 words (longer queries risk FTS5 parse errors)
-    fts_query = " OR ".join(words[:5])
+    fts_query = " OR ".join(words[:8])
 
     project_filter = "AND (m.project = ? OR m.project IS NULL)" if project else ""
     params = [fts_query] + ([project] if project else []) + [limit]
@@ -973,8 +1053,10 @@ if __name__ == "__main__":
                 pass
         # Output gate: LLM judge filters by intent before top-K slice. Shares
         # JUDGE_ENABLED env toggle with Path A. Soft-fails to RRF order on error.
-        # JUDGE_MIN_CANDIDATES (default 4) gates against tiny pools internally.
-        if _HAS_JUDGE and len(new_general) > MAX_GENERAL_RESULTS:
+        # Runs for small pools too (>= 2): irrelevant items used to survive
+        # whenever the pool fit inside MAX_GENERAL_RESULTS (audit 2026-06-12);
+        # JUDGE_MIN_CANDIDATES still gates the tiniest pools internally.
+        if _HAS_JUDGE and len(new_general) >= 2:
             try:
                 _n_cand = len(new_general)
                 judged, _judge_status, _judge_tele = _judge_relevance(
@@ -1004,34 +1086,42 @@ if __name__ == "__main__":
             # Same memories as last prompt — skip injection, preserve existing context
             pass
         elif capped_general:
-            lines = [f"- [{r['type']}] {r['content']}" for r in capped_general]
+            lines = [
+                f"- [{r['type']}] {r['content']}{_age_suffix(r.get('created_at'))}"
+                for r in capped_general
+            ]
             sections.append("Brain context:\n" + "\n".join(lines))
             new_ids.update(r["id"] for r in capped_general)
             new_chars += capped_chars
             memory_ids_to_save = current_memory_ids
             _bump_injected_access(conn, current_memory_ids)
 
-        # Phase 2: Semantic Toolbox — FTS5 pre-filter, fall back to vector if needed
-        # Tools refresh per-prompt (no dedup), but skip injection when results identical
+        # Phase 2: Semantic Toolbox — vector PRIMARY when the embedding exists
+        # (it is already computed for Phase 1, so the old FTS-first "savings"
+        # were imaginary while junk FTS hits suppressed the semantic path —
+        # measured 91% never-followed suggestions, audit 2026-06-12). FTS is
+        # the no-embedding fallback only. Each tool suggested once per session.
         tool_names_to_save = None
         new_tool_chars = 0
         prev_tools = load_last_tools()
+        already_suggested = load_suggested_tools()
         tool_budget_used = load_tool_chars()
 
-        # Try FTS5 first (free, ~1ms) — avoids embedding API call ~80% of the time
-        tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS, project=project)
-        if len(tools) < MAX_TOOL_RESULTS and embedding is not None:
-            # FTS5 returned insufficient results — fall back to vector search
+        if embedding is not None:
             tools = search_tools_vector(conn, embedding, project=project)
+        else:
+            tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS, project=project)
 
-        tools = tools[:MAX_TOOL_RESULTS]
+        tools = [t for t in tools if t["name"] not in already_suggested][:MAX_TOOL_RESULTS]
         current_tool_names = [t["name"] for t in tools]
         # Skip if same tools as last prompt (avoid redundant system-reminders)
         if current_tool_names != prev_tools and tools:
-            tool_text = "\n".join(f"- {t['name']}: {t['content']}" for t in tools)
+            tool_text = "\n".join(f"- {t['name']}: {_flatten_clip(t['content'])}" for t in tools)
             new_tool_chars = len(tool_text)
             if tool_budget_used + new_tool_chars <= MAX_TOOL_INJECTED_CHARS:
                 sections.append("Relevant tools:\n" + tool_text)
+                # Toolbox telemetry — same blind spot as memories pre-audit
+                _bump_injected_access(conn, [t["id"] for t in tools if t.get("id")])
         tool_names_to_save = current_tool_names
 
         conn.close()

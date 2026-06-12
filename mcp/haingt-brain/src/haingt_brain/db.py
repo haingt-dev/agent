@@ -120,15 +120,18 @@ def init_schema(conn: sqlite3.Connection) -> None:
     except sqlite3.OperationalError:
         pass  # Column already exists
 
-    # Backfill importance for existing memories
-    # Triggers when: memories with default 0.5 that have access history OR source metadata
-    needs_backfill = conn.execute(
-        """SELECT COUNT(*) FROM memories
-           WHERE importance = 0.5
-             AND (access_count > 0 OR json_extract(metadata, '$.source') IS NOT NULL)"""
-    ).fetchone()[0]
-    if needs_backfill:
+    # Backfill importance for existing memories — ONE-SHOT via brain_meta flag.
+    # The old count-based trigger re-ran forever: rows whose recomputed value
+    # is exactly 0.5 re-satisfy the condition on every connect (audit 2026-06-12).
+    done = conn.execute(
+        "SELECT value FROM brain_meta WHERE key = 'importance_backfill_done'"
+    ).fetchone()
+    if not done:
         _backfill_importance(conn)
+        conn.execute(
+            "INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('importance_backfill_done', '1')"
+        )
+        conn.commit()
 
 
 def serialize_embedding(embedding: list[float]) -> bytes:

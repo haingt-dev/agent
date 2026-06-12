@@ -4,6 +4,8 @@ import json
 import sqlite3
 from collections import deque
 
+from ..search import sanitize_fts_query
+
 
 def brain_graph(
     conn: sqlite3.Connection,
@@ -27,26 +29,34 @@ def brain_graph(
         "SELECT * FROM memories WHERE id = ?", (entity,)
     ).fetchone()
 
-    # If not found by ID, search by content
+    # If not found by ID, search by content (sanitized — raw '.', '-', '+'
+    # are FTS5 syntax and crashed the lookup, audit 2026-06-12)
     if not root_row:
-        root_row = conn.execute(
-            """SELECT m.* FROM memories m
-               JOIN memory_fts f ON m.id = f.memory_id
-               WHERE memory_fts MATCH ?
-               ORDER BY f.rank LIMIT 1""",
-            (entity,),
-        ).fetchone()
+        fts_query = sanitize_fts_query(entity)
+        if fts_query:
+            try:
+                root_row = conn.execute(
+                    """SELECT m.* FROM memories m
+                       JOIN memory_fts f ON m.id = f.memory_id
+                       WHERE memory_fts MATCH ?
+                       ORDER BY f.rank LIMIT 1""",
+                    (fts_query,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                root_row = None
 
     if not root_row:
         return {"status": "not_found", "query": entity}
 
     root_id = root_row["id"]
 
-    # BFS traversal
+    # BFS traversal. seen_edges: each edge is discovered from both endpoints —
+    # without dedup ~40% of emitted edges were duplicates (audit 2026-06-12).
     visited = {root_id}
     queue = deque([(root_id, 0)])
     nodes = [_format_memory(root_row)]
     edges = []
+    seen_edges: set[tuple] = set()
 
     while queue:
         current_id, current_depth = queue.popleft()
@@ -73,12 +83,15 @@ def brain_graph(
 
         for rel in outgoing:
             target_id = rel["target_id"]
-            edges.append({
-                "from": current_id,
-                "to": target_id,
-                "type": rel["relation_type"],
-                "weight": rel["weight"],
-            })
+            edge_key = (current_id, target_id, rel["relation_type"])
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                edges.append({
+                    "from": current_id,
+                    "to": target_id,
+                    "type": rel["relation_type"],
+                    "weight": rel["weight"],
+                })
             if target_id not in visited:
                 visited.add(target_id)
                 node = conn.execute("SELECT * FROM memories WHERE id = ?", (target_id,)).fetchone()
@@ -88,12 +101,15 @@ def brain_graph(
 
         for rel in incoming:
             source_id = rel["source_id"]
-            edges.append({
-                "from": source_id,
-                "to": current_id,
-                "type": rel["relation_type"],
-                "weight": rel["weight"],
-            })
+            edge_key = (source_id, current_id, rel["relation_type"])
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                edges.append({
+                    "from": source_id,
+                    "to": current_id,
+                    "type": rel["relation_type"],
+                    "weight": rel["weight"],
+                })
             if source_id not in visited:
                 visited.add(source_id)
                 node = conn.execute("SELECT * FROM memories WHERE id = ?", (source_id,)).fetchone()

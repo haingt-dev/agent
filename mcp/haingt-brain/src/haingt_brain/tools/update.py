@@ -25,56 +25,65 @@ def brain_update(
     if not row:
         return {"error": f"Memory {memory_id} not found"}
 
+    if content is None and tags is None and metadata is None:
+        return {"error": "No fields to update"}
+
     updates = []
     params: list = []
 
+    # Embed outside the write transaction (may raise on API error)
+    emb_bytes = None
     if content is not None:
-        updates.append("content = ?")
-        params.append(content)
+        emb_bytes = serialize_embedding(embed_text(content))
 
-        # Re-embed
-        embedding = embed_text(content)
-        emb_bytes = serialize_embedding(embedding)
-        conn.execute("DELETE FROM memory_vectors WHERE memory_id = ?", (memory_id,))
-        conn.execute(
-            "INSERT INTO memory_vectors (memory_id, embedding) VALUES (?, ?)",
-            (memory_id, emb_bytes),
-        )
+    try:
+        if content is not None:
+            updates.append("content = ?")
+            params.append(content)
 
-        # Re-index FTS
-        conn.execute("DELETE FROM memory_fts WHERE memory_id = ?", (memory_id,))
-        new_tags = json.dumps(tags) if tags is not None else row["tags"]
-        conn.execute(
-            "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
-            (memory_id, content, new_tags, row["project"] or ""),
-        )
-
-    if tags is not None:
-        updates.append("tags = ?")
-        params.append(json.dumps(tags))
-        # If content didn't change but tags did, update FTS tags
-        if content is None:
-            conn.execute("DELETE FROM memory_fts WHERE memory_id = ?", (memory_id,))
+            # Re-embed
+            conn.execute("DELETE FROM memory_vectors WHERE memory_id = ?", (memory_id,))
             conn.execute(
-                "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
-                (memory_id, row["content"], json.dumps(tags), row["project"] or ""),
+                "INSERT INTO memory_vectors (memory_id, embedding) VALUES (?, ?)",
+                (memory_id, emb_bytes),
             )
 
-    if metadata is not None:
-        updates.append("metadata = ?")
-        params.append(json.dumps(metadata))
+            # Re-index FTS
+            conn.execute("DELETE FROM memory_fts WHERE memory_id = ?", (memory_id,))
+            new_tags = json.dumps(tags) if tags is not None else row["tags"]
+            conn.execute(
+                "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
+                (memory_id, content, new_tags, row["project"] or ""),
+            )
 
-    if not updates:
-        return {"error": "No fields to update"}
+        if tags is not None:
+            updates.append("tags = ?")
+            params.append(json.dumps(tags))
+            # If content didn't change but tags did, update FTS tags
+            if content is None:
+                conn.execute("DELETE FROM memory_fts WHERE memory_id = ?", (memory_id,))
+                conn.execute(
+                    "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
+                    (memory_id, row["content"], json.dumps(tags), row["project"] or ""),
+                )
 
-    updates.append("updated_at = datetime('now')")
-    params.append(memory_id)
+        if metadata is not None:
+            updates.append("metadata = ?")
+            params.append(json.dumps(metadata))
 
-    conn.execute(
-        f"UPDATE memories SET {', '.join(updates)} WHERE id = ?",
-        params,
-    )
-    conn.commit()
+        updates.append("updated_at = datetime('now')")
+        params.append(memory_id)
+
+        conn.execute(
+            f"UPDATE memories SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        conn.commit()
+    except Exception:
+        # Never leave a dangling write transaction on the shared connection —
+        # it would ghost-commit on the next unrelated commit (audit 2026-06-12)
+        conn.rollback()
+        raise
 
     # Return updated memory
     updated = conn.execute("SELECT * FROM memories WHERE id = ?", (memory_id,)).fetchone()

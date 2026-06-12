@@ -19,9 +19,12 @@ _ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 def _load_env() -> None:
-    """Load .env file manually (no extra dependency needed)."""
-    if os.environ.get("OPENAI_API_KEY"):
-        return
+    """Load .env file manually (no extra dependency needed).
+
+    Always parses the file (setdefault prevents overriding real env vars).
+    The old OPENAI_API_KEY early-return meant an exported key in the shell
+    silently skipped JUDGE_ENABLED/JUDGE_MODEL/etc. (audit 2026-06-12).
+    """
     if _ENV_FILE.exists():
         for line in _ENV_FILE.read_text().strip().splitlines():
             line = line.strip()

@@ -63,6 +63,14 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     )
 
 
+# Default strategy set for unattended callers (MCP brain_session('consolidate'),
+# session-start auto-trigger, cron). 'decay' and 'patterns' are EXCLUDED on
+# purpose and require explicit opt-in: both act on last_accessed, which was
+# systematically under-recorded until injection telemetry landed 2026-06-12,
+# and a dry-run that day measured decay would DELETE 526/1628 memories (32%).
+SAFE_STRATEGIES: set[str] = {"merge", "sessions", "cluster"}
+
+
 def consolidate_all(
     conn: sqlite3.Connection,
     dry_run: bool = False,
@@ -71,11 +79,8 @@ def consolidate_all(
     """Run consolidation strategies. Returns a report of actions taken.
 
     strategies: subset of {'merge', 'patterns', 'sessions', 'decay', 'cluster'}
-    to run; None = all. 'decay' covers decay_importance; 'patterns' covers
-    decay_patterns. NOTE (audit 2026-06-12): both decay strategies act on
-    last_accessed, which was systematically under-recorded until injection
-    telemetry landed — run them only after several weeks of accumulated
-    access data, or they will prune legitimate old memories.
+    to run; None = SAFE_STRATEGIES (no decay/patterns — see note above).
+    Destructive decay strategies must be requested explicitly.
 
     Includes a file-based lock (before circuit breaker) to prevent concurrent runs,
     and a circuit breaker: if consolidation has failed 3+ consecutive times,
@@ -95,7 +100,8 @@ def consolidate_all(
                 "status": "circuit_breaker_open",
                 "message": (
                     f"Consolidation disabled after {failures} consecutive failures. "
-                    "Reset with brain_session('consolidate')."
+                    "Inspect the cause, then reset: UPDATE brain_meta SET value='0' "
+                    "WHERE key='consolidation_failures'."
                 ),
             }
 
@@ -121,7 +127,7 @@ def _do_consolidate_all(
     strategies: set[str] | None = None,
 ) -> dict:
     """Internal implementation of all consolidation strategies."""
-    run = strategies if strategies is not None else {"merge", "patterns", "sessions", "decay", "cluster"}
+    run = strategies if strategies is not None else set(SAFE_STRATEGIES)
     report = {
         "duplicates_merged": 0,
         "patterns_decayed": 0,
@@ -413,12 +419,15 @@ def consolidate_sessions(
                 metadata={"source": "consolidation", "source_session_ids": [s["id"] for s in sessions]},
             )
 
-            # Delete old session summaries from memories table (session records kept)
+            # Delete old session summaries from memories table (session records
+            # kept). Use _delete_memory so vec/fts/relations rows go too.
             for s in sessions:
-                conn.execute(
-                    "DELETE FROM memories WHERE type = 'session' AND content = ?",
+                stale_ids = conn.execute(
+                    "SELECT id FROM memories WHERE type = 'session' AND content = ?",
                     (s["summary"],),
-                )
+                ).fetchall()
+                for (sid,) in stale_ids:
+                    _delete_memory(conn, sid)
 
         result["consolidated"] += len(sessions)
 
@@ -447,6 +456,22 @@ def decay_importance(
     result = {"decayed": 0, "pruned": 0, "graph_boosted": 0, "details": []}
     PRUNE_THRESHOLD = 0.05
 
+    # Compounding guard (audit 2026-06-12): stored importance is ALREADY the
+    # decayed value from the previous run. Applying compute_decay with total
+    # days-since-access again would double-decay on every run. Cap the decay
+    # window at days-since-last-decay-run.
+    last_run_row = conn.execute(
+        "SELECT value FROM brain_meta WHERE key = 'last_importance_decay'"
+    ).fetchone()
+    days_since_last_run = None
+    if last_run_row:
+        try:
+            days_since_last_run = (
+                datetime.utcnow() - datetime.fromisoformat(last_run_row[0])
+            ).total_seconds() / 86400
+        except (ValueError, TypeError):
+            pass
+
     rows = conn.execute("""
         SELECT id, type, content, importance, access_count, last_accessed, created_at
         FROM memories
@@ -461,6 +486,8 @@ def decay_importance(
             days = (datetime.utcnow() - dt).total_seconds() / 86400
         except (ValueError, TypeError):
             continue
+        if days_since_last_run is not None:
+            days = min(days, days_since_last_run)
 
         old_imp = row["importance"] if row["importance"] is not None else 0.5
 
@@ -489,6 +516,7 @@ def decay_importance(
             result["decayed"] += 1
 
     if not dry_run:
+        _set_meta(conn, "last_importance_decay", datetime.utcnow().isoformat())
         conn.commit()
 
     return result
@@ -593,7 +621,21 @@ def cluster_and_synthesize(
             if len(cluster) < min_cluster:
                 continue
 
-            # Synthesize cluster into abstract memory
+            # Synthesize cluster into abstract memory. Dry runs report the
+            # would-be cluster without paying for the LLM call.
+            if dry_run:
+                preview = "; ".join(m["content"][:50] for m in cluster[:3])
+                result["details"].append(
+                    f"[dry-run] Would synthesize {len(cluster)} {cluster[0]['type']}s: {preview}"
+                )
+                for m in cluster:
+                    used.add(m["id"])
+                result["synthesized"] += 1
+                clusters_processed += 1
+                if clusters_processed >= 3:
+                    break
+                continue
+
             cluster_content = "\n---\n".join(
                 f"[{m['type']}] {m['content'][:200]}" for m in cluster
             )

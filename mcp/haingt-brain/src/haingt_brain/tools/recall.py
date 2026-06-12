@@ -18,6 +18,7 @@ import sqlite3
 from ..judge import (
     STATUS_DISABLED,
     STATUS_BUDGET,
+    STATUS_MIN_CANDIDATES,
     STATUS_OK,
     bump_telemetry,
     get_budget_status,
@@ -119,15 +120,15 @@ def brain_recall(
     # (disabled/budget/timeout/parse error), pure vector neighbors on a novel
     # topic look confident but measured 10/10 irrelevant on adversarial
     # queries. Without a single FTS term match in the pool, return nothing —
-    # an empty recall is strictly better than injected noise. Only applies
-    # when hit-source info is present (callers bypassing hybrid_search skip it).
-    if (
-        judge_status != STATUS_OK
-        and results
-        and any("fts_hit" in r for r in results)
-        and not any(r.get("fts_hit") for r in results)
-    ):
-        results = []
+    # an empty recall is strictly better than injected noise.
+    # Exemptions (audit phase 2, 2026-06-12): fts_hit=None means the FTS leg
+    # errored/was skipped — 'unknown', not 'no match' — never gate on it; and
+    # min_candidates pools are legitimately small (type-filtered recalls),
+    # not adversarial-noise shaped.
+    if judge_status not in (STATUS_OK, STATUS_MIN_CANDIDATES) and results:
+        hit_vals = [r.get("fts_hit") for r in results if "fts_hit" in r]
+        if hit_vals and all(v is not None for v in hit_vals) and not any(hit_vals):
+            results = []
 
     # Stage 4: Bump access_count on FINAL top-n only (not the oversampled pool)
     final_ids = [r["id"] for r in results if r.get("id")]

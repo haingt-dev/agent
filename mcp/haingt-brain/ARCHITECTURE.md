@@ -6,6 +6,20 @@
 > Origin: Applied concepts from DeepLearning.AI "Building Memory-Aware Agents" course
 > Maintenance: before trusting any section, verify against `hooks/hooks.json` + `ls src/haingt_brain/` — the 2026-06-12 audit found 14 drift points in the 04-02 version.
 
+## 0a. Changelog — 2026-06-12 audit phase 2 (server + hooks hardening)
+
+Phase-2 audit (3 more dimensions: deep server code, injection eval, transcript usage) findings fixed same day:
+
+- **CRITICAL — decay time bomb defused**: `consolidate_all` now defaults to `SAFE_STRATEGIES` ({merge, sessions, cluster}); the MCP `brain_session('consolidate')` path would have run decay and deleted 526/1628 memories (32%, measured dry-run). Compounding decay bug fixed (decay window capped at days-since-last-decay-run via `brain_meta.last_importance_decay`).
+- **FTS5 sanitization**: `sanitize_fts_query` quotes tokens — 'judge.py', 'chimera-protocol', 'C++' used to raise OperationalError, silently degrade to vector-only, then get blanked by the noise gate. Vector fallback now marks `fts_hit=NULL` (unknown) and the noise gate exempts NULL hits + min_candidates pools. graph.py shares the sanitizer + dedups edges (~40% were duplicates).
+- **vn_normalize**: mixed-case guard + VN syllable-structure validator + denylist — 'DDoS'→'Đó', 'uwsgi'→'ưsgi', 'Kuwait'→'Kưait' corruptions fixed; legit Telex ('nguwowif'→'người') unaffected.
+- **Transaction safety**: brain_save/brain_update wrap writes in try→rollback (failed saves used to leave dangling transactions that ghost-committed later); relations validated before any INSERT.
+- **Session attribution**: `brain_session('save')` passes `project` through (233/234 sessions had self-perpetuated 'digital-identity'); recent-sessions query NULL-safe.
+- **Hook injection quality** (prompt-context.py): LLM gate rebalanced with life-domain ALLOW examples (was 97.8% skip-biased — blocked career/schedule/Upwork/vaccine prompts); ≤4-word skip exempts path/code tokens; tool search inverted to vector-primary with cosine floor 0.35 (calibrated: true matches 0.435+, noise ≤0.312; old FTS-first path produced 91%-never-followed suggestions) + once-per-session suggestion set + flattened/word-clipped content + tool access telemetry; memory FTS leg uses full-prompt content words (was first-5-words of first-100-chars); judge runs for small pools (≥2); injected memories carry '(Nd ago)' age labels.
+- **SessionStart** (brain-context.py): semantic dedup across sections via dedup_pool; decisions over-fetch 6→3; `compact` source emits hot-tier only (one 7-week session had accumulated 77 near-identical full blocks).
+- **Misc**: `_load_env` always parses .env (exported OPENAI_API_KEY used to silently disable the judge); importance backfill one-shot via brain_meta flag (ran on every connect forever); dry-run consolidation no longer makes paid LLM calls; weekly cron runner TTL-purges pre-compact snapshots >14d (they are vector-less and dedup-invisible by design); index_tools word-boundary clip.
+- **Deferred** (known, low-priority): hybrid_search filters still apply after top-20 candidate selection (affects narrow filtered recalls); anaphoric continuation prompts ("Chốt B…") still retrieve without the referent (needs assistant-tail blending); hook-side judge spend not counted against the daily budget; pre-compact-snapshot.py internals still the one unaudited file (blast radius now TTL-bounded).
+
 ## 0. Changelog — 2026-06-12 full-system audit
 
 Changes shipped (sections below may not reflect them yet — this block wins on conflict):

@@ -49,32 +49,40 @@ def brain_save(
     tags_json = json.dumps(tags or [])
     meta_json = json.dumps(metadata or {})
 
-    # Embed the content
+    # Validate relations shape BEFORE any INSERT — a malformed entry raising
+    # mid-write used to leave a dangling transaction that ghost-committed the
+    # half-saved memory on the next unrelated commit (audit 2026-06-12).
+    valid_relations = [
+        rel for rel in (relations or [])
+        if isinstance(rel, dict) and rel.get("target_id") and rel.get("relation_type")
+    ]
+
+    # Embed the content (outside the write transaction — may raise on API error)
     embedding = embed_text(content)
     emb_bytes = serialize_embedding(embedding)
 
-    # Insert memory
-    conn.execute(
-        """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        (memory_id, content, memory_type, tags_json, project, meta_json, importance),
-    )
+    try:
+        # Insert memory
+        conn.execute(
+            """INSERT INTO memories (id, content, type, tags, project, metadata, importance)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (memory_id, content, memory_type, tags_json, project, meta_json, importance),
+        )
 
-    # Insert vector
-    conn.execute(
-        "INSERT INTO memory_vectors (memory_id, embedding) VALUES (?, ?)",
-        (memory_id, emb_bytes),
-    )
+        # Insert vector
+        conn.execute(
+            "INSERT INTO memory_vectors (memory_id, embedding) VALUES (?, ?)",
+            (memory_id, emb_bytes),
+        )
 
-    # Insert FTS
-    conn.execute(
-        "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
-        (memory_id, content, tags_json, project or ""),
-    )
+        # Insert FTS
+        conn.execute(
+            "INSERT INTO memory_fts (memory_id, content, tags, project) VALUES (?, ?, ?, ?)",
+            (memory_id, content, tags_json, project or ""),
+        )
 
-    # Insert relations
-    if relations:
-        for rel in relations:
+        # Insert relations
+        for rel in valid_relations:
             try:
                 conn.execute(
                     """INSERT OR IGNORE INTO relations (source_id, target_id, relation_type, weight)
@@ -92,10 +100,13 @@ def brain_save(
                         "UPDATE memories SET importance = COALESCE(importance, 0.5) * 0.5 WHERE id = ?",
                         (rel["target_id"],),
                     )
-            except (sqlite3.IntegrityError, KeyError):
-                pass  # Skip invalid relations
+            except sqlite3.IntegrityError:
+                pass  # Skip relations pointing at missing targets
 
-    conn.commit()
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
     return {
         "id": memory_id,

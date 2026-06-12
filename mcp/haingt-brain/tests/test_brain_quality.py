@@ -337,6 +337,13 @@ def _run_simulation(conn: sqlite3.Connection, tracking: dict, weeks: int = 6) ->
                 )
 
         # 5. Run consolidation (decay_importance only — skip merge_duplicates which needs vectors)
+        # The compounding guard caps decay at days-since-last-decay-run; this
+        # simulation fakes time by shifting row timestamps, so tell the guard
+        # one real week elapsed since the previous run.
+        conn.execute(
+            "INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('last_importance_decay', ?)",
+            ((datetime.utcnow() - timedelta(days=7)).isoformat(),),
+        )
         decay_importance(conn)
 
         # 6. Measure

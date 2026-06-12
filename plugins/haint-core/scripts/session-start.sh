@@ -22,9 +22,11 @@ fi
 echo ""
 
 # --- Brain: deterministic context injection (project anchor) ---
+# SOURCE passed through: compact-mode emits hot-tier only (the compact summary
+# already carries recent state — audit 2026-06-12)
 BRAIN_PYTHON="/home/haint/Projects/agent/mcp/haingt-brain/.venv/bin/python3"
 [ -x "$BRAIN_PYTHON" ] || BRAIN_PYTHON="python3"
-BRAIN_CONTEXT=$("$BRAIN_PYTHON" "${CLAUDE_PLUGIN_ROOT}/scripts/brain-context.py" 2>/dev/null)
+BRAIN_CONTEXT=$("$BRAIN_PYTHON" "${CLAUDE_PLUGIN_ROOT}/scripts/brain-context.py" "$SOURCE" 2>/dev/null)
 if [ -n "$BRAIN_CONTEXT" ]; then
     echo "--- Brain Context ---"
     echo "$BRAIN_CONTEXT"

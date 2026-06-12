@@ -15,6 +15,24 @@ SUPERSEDED_FILTER = (
 )
 
 
+def sanitize_fts_query(query: str) -> str:
+    """Make an arbitrary string safe for FTS5 MATCH.
+
+    Raw MATCH treats '.', '-', '+', '(' as syntax — 'judge.py timeout' and
+    'chimera-protocol naming' raise OperationalError, silently degrading
+    hybrid search to vector-only (audit 2026-06-12). Quote each whitespace
+    token as a phrase: preserves implicit-AND semantics, neutralizes syntax.
+    """
+    tokens = []
+    for raw in query.split():
+        t = raw.replace('"', '""')
+        # Skip tokens with no indexable characters (pure punctuation)
+        if not any(c.isalnum() for c in t):
+            continue
+        tokens.append(f'"{t}"')
+    return " ".join(tokens[:16])
+
+
 def hybrid_search(
     conn: sqlite3.Connection,
     query: str,
@@ -86,12 +104,17 @@ def hybrid_search(
     LIMIT :k
     """
 
-    params.update({"query": query, "embedding": emb_bytes, "rrf_k": rrf_k, "k": k})
+    fts_query = sanitize_fts_query(query)
+    params.update({"query": fts_query, "embedding": emb_bytes, "rrf_k": rrf_k, "k": k})
 
     try:
+        if not fts_query:
+            raise sqlite3.OperationalError("empty FTS query after sanitization")
         rows = conn.execute(sql, params).fetchall()
     except sqlite3.OperationalError:
-        # Fallback: vector-only search if FTS fails (e.g., empty FTS table)
+        # Fallback: vector-only search if FTS fails (e.g., empty FTS table).
+        # fts_hit comes back NULL there — 'unknown', not 'no keyword match' —
+        # so downstream noise gates must not treat this path as gate-worthy.
         rows = vector_search(conn, query_embedding, memory_type, project, k, time_range)
         return rows
 
@@ -184,7 +207,7 @@ def vector_search(
     where_clause = " AND ".join(filters)
 
     sql = f"""
-    SELECT m.*, 0 AS fts_hit, 1 AS vec_hit, v.distance
+    SELECT m.*, NULL AS fts_hit, 1 AS vec_hit, v.distance
     FROM memory_vectors v
     JOIN memories m ON m.id = v.memory_id
     WHERE v.embedding MATCH :embedding

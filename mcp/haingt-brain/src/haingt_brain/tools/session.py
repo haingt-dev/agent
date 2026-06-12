@@ -53,12 +53,14 @@ def brain_session_start(conn: sqlite3.Connection, project: str | None = None) ->
     if tool_drift:
         context["tool_index_drift"] = tool_drift
 
-    # Last 3 session summaries for this project
+    # Last 3 session summaries for this project (NULL-safe: project=None
+    # matches NULL-project sessions instead of matching nothing)
     rows = conn.execute(
         """SELECT id, summary, ended_at FROM sessions
-           WHERE project = ? AND summary IS NOT NULL AND ended_at IS NOT NULL
+           WHERE (project = ? OR (? IS NULL AND project IS NULL))
+             AND summary IS NOT NULL AND ended_at IS NOT NULL
            ORDER BY ended_at DESC LIMIT 3""",
-        (project,),
+        (project, project),
     ).fetchall()
     if rows:
         context["recent_sessions"] = [
@@ -120,22 +122,28 @@ def brain_session_save(
     decisions: list[str] | None = None,
     discoveries: list[str] | None = None,
     entities: list[str] | None = None,
+    project: str | None = None,
 ) -> dict:
     """
     Save session learnings and mark session as ended.
 
     If session_id is None, auto-creates a session first (single-step save).
     Optionally auto-creates memory entries for decisions, discoveries, and entities.
+    project: explicit scope for the auto-created session. Last-row inheritance
+    applies ONLY when omitted — unconditional inheritance self-perpetuated one
+    label forever (233/234 sessions tagged digital-identity, audit 2026-06-12).
     """
     from .save import brain_save
 
     # Auto-create session if not provided (enables single-step save from /wrap)
     if not session_id:
         session_id = uuid.uuid4().hex[:12]
-        project = conn.execute(
-            "SELECT project FROM sessions ORDER BY rowid DESC LIMIT 1"
-        ).fetchone()
-        proj = project["project"] if project else None
+        proj = project
+        if proj is None:
+            last = conn.execute(
+                "SELECT project FROM sessions ORDER BY rowid DESC LIMIT 1"
+            ).fetchone()
+            proj = last["project"] if last else None
         conn.execute(
             "INSERT INTO sessions (id, project) VALUES (?, ?)",
             (session_id, proj),

@@ -85,6 +85,46 @@ _INVALID_INIT_CLUSTERS: Final[frozenset[str]] = frozenset({
     "sw", "tw", "wh", "wr",
 })
 
+# English tech terms that would otherwise decode to VALID Vietnamese
+# syllables (audit 2026-06-12: 'ddos' → 'đó' is phonotactically legal Telex,
+# so structural validation cannot reject it — only context could).
+_TECH_DENYLIST: Final[frozenset[str]] = frozenset({"ddos"})
+
+# Vietnamese syllable structure (tone-less, post-digraph-conversion).
+# Used to reject decodes that pass the signal check but are not Vietnamese:
+# 'uwsgi'→'ưsgi' (coda 'sgi'), 'Kuwait'→'kưait' (nucleus 'ưai'),
+# 'thruway'→'thrưay' (onset 'thr').
+_VN_ONSETS: Final[tuple[str, ...]] = (  # longest first for greedy peel
+    "ngh", "ch", "gh", "gi", "kh", "ng", "nh", "ph", "qu", "th", "tr",
+    "b", "c", "d", "đ", "g", "h", "k", "l", "m", "n", "p", "r", "s", "t", "v", "x",
+)
+_VN_CODAS: Final[tuple[str, ...]] = ("ch", "ng", "nh", "c", "m", "n", "p", "t")
+_VN_NUCLEI: Final[frozenset[str]] = frozenset({
+    "a", "ă", "â", "e", "ê", "i", "o", "ô", "ơ", "u", "ư", "y",
+    "ai", "ao", "au", "ay", "âu", "ây", "eo", "êu", "ia", "iê", "iu",
+    "oa", "oă", "oe", "oi", "ôi", "ơi", "ua", "uâ", "uê", "ui", "uô",
+    "uơ", "uy", "ưa", "ưi", "ươ", "ưu", "yê", "ye",
+    "iêu", "oai", "oay", "oeo", "uây", "uôi", "uya", "uyê", "uyu",
+    "ươi", "ươu", "yêu", "uyu",
+})
+
+
+def _is_valid_vn_syllable(w: str) -> bool:
+    """Structural check on a tone-less decoded word: onset + nucleus + coda."""
+    rest = w
+    for onset in _VN_ONSETS:
+        if rest.startswith(onset):
+            rest = rest[len(onset):]
+            break
+    coda = ""
+    for c in _VN_CODAS:
+        if rest.endswith(c) and len(rest) > len(c):
+            coda = c
+            rest = rest[: -len(c)]
+            break
+    return rest in _VN_NUCLEI
+
+
 # Strong Telex signal patterns — compiled once at module load
 _DD_OR_UW: Final[re.Pattern] = re.compile(r"^dd|uw", re.IGNORECASE)
 _DIGRAPH_JX: Final[re.Pattern] = re.compile(
@@ -189,7 +229,15 @@ def _telex_decode(word: str) -> str | None:
     if not word.isascii() or not word.isalpha() or len(word) < 2:
         return None
 
+    # Mixed-case words (DDoS, uWSGI) are identifiers/acronyms, never Telex —
+    # Telex input is all-lower or Title-case (audit 2026-06-12).
+    if any(c.isupper() for c in word[1:]):
+        return None
+
     wl = word.lower()
+
+    if wl in _TECH_DENYLIST:
+        return None
 
     if _starts_with_invalid_cluster(wl):
         return None
@@ -228,6 +276,11 @@ def _telex_decode(word: str) -> str | None:
 
     # Must contain at least one vowel
     if not any(c in _VIET_VOWELS for c in w):
+        return None
+
+    # Structural gate: the tone-less decode must be a plausible Vietnamese
+    # syllable, else the 'signal' was an English coincidence (uwsgi, Kuwait).
+    if not _is_valid_vn_syllable(w):
         return None
 
     # Step 4: apply tone to target vowel

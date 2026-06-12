@@ -52,6 +52,22 @@ def main() -> int:
 
     entry = {"ts": datetime.now().isoformat(timespec="seconds")}
     try:
+        # TTL purge: pre-compact snapshots are post-compact continuity aids
+        # (98% never recalled after day 1, vector-less, dedup-invisible) —
+        # they re-accumulate between runs, so purge >14d each week.
+        from haingt_brain.consolidate import _delete_memory
+
+        stale = conn.execute(
+            """SELECT id FROM memories
+               WHERE type = 'session'
+                 AND json_extract(metadata, '$.source') = 'pre-compact-hook'
+                 AND created_at < datetime('now', '-14 days')"""
+        ).fetchall()
+        for (sid,) in stale:
+            _delete_memory(conn, sid)
+        conn.commit()
+        entry["snapshots_purged"] = len(stale)
+
         report = consolidate_all(conn, dry_run=False, strategies=STRATEGIES)
         entry["status"] = report.get("status", "ok")
         entry["merged"] = report.get("duplicates_merged", 0)
