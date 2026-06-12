@@ -8,13 +8,13 @@
       "name": "haint-core",
       "source": "./plugins/haint-core",
       "description": "Core hooks and workflow skills: Memory Bank auto-load, git safety, notifications, ship, fix-issue, review-pr, story",
-      "version": "1.4.1"
+      "version": "4.1.0"
     },
     {
       "name": "godot-dev",
       "source": "./plugins/godot-dev",
-      "description": "Godot 4.x GDScript patterns and debugging",
-      "version": "1.0.0"
+      "description": "Godot 4.x debugging, GDScript patterns, project status (docs/STATUS.md), and bundled godot-mcp server",
+      "version": "2.4.0"
     }
   ]
 }
