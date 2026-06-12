@@ -26,25 +26,34 @@ from haingt_brain.tools.forget import brain_forget
 # Manually curated. Each entry: (mcp_server, tool_name, description, category)
 
 MCP_TOOLS = [
-    # Google Calendar
-    ("Google_Calendar", "gcal_create_event", "Create a new event on Google Calendar with title, time, attendees, and description", "calendar"),
-    ("Google_Calendar", "gcal_delete_event", "Delete an event from Google Calendar by event ID", "calendar"),
-    ("Google_Calendar", "gcal_find_meeting_times", "Find available meeting times for multiple attendees on Google Calendar", "calendar"),
-    ("Google_Calendar", "gcal_find_my_free_time", "Find free time slots on your Google Calendar for a given date range", "calendar"),
-    ("Google_Calendar", "gcal_get_event", "Get details of a specific Google Calendar event by ID", "calendar"),
-    ("Google_Calendar", "gcal_list_calendars", "List all available Google Calendars", "calendar"),
-    ("Google_Calendar", "gcal_list_events", "List events from Google Calendar with optional date filtering", "calendar"),
-    ("Google_Calendar", "gcal_respond_to_event", "Accept, decline, or tentatively accept a Google Calendar event", "calendar"),
-    ("Google_Calendar", "gcal_update_event", "Update an existing Google Calendar event", "calendar"),
+    # Google Calendar (claude.ai connector — names verified live 2026-06-12)
+    ("claude_ai_Google_Calendar", "create_event", "Create a new event on Google Calendar with title, time, attendees, and description", "calendar"),
+    ("claude_ai_Google_Calendar", "delete_event", "Delete an event from Google Calendar by event ID", "calendar"),
+    ("claude_ai_Google_Calendar", "get_event", "Get details of a specific Google Calendar event by ID", "calendar"),
+    ("claude_ai_Google_Calendar", "list_calendars", "List all available Google Calendars", "calendar"),
+    ("claude_ai_Google_Calendar", "list_events", "List events from Google Calendar with optional date filtering", "calendar"),
+    ("claude_ai_Google_Calendar", "respond_to_event", "Accept, decline, or tentatively accept a Google Calendar event", "calendar"),
+    ("claude_ai_Google_Calendar", "suggest_time", "Suggest available meeting times / find free slots on Google Calendar", "calendar"),
+    ("claude_ai_Google_Calendar", "update_event", "Update an existing Google Calendar event", "calendar"),
 
-    # Gmail
-    ("Gmail", "gmail_create_draft", "Create a draft email in Gmail with recipients, subject, and body", "email"),
-    ("Gmail", "gmail_get_profile", "Get Gmail profile information (email address, messages count)", "email"),
-    ("Gmail", "gmail_list_drafts", "List draft emails in Gmail", "email"),
-    ("Gmail", "gmail_list_labels", "List all labels in Gmail", "email"),
-    ("Gmail", "gmail_read_message", "Read a specific Gmail message by ID", "email"),
-    ("Gmail", "gmail_read_thread", "Read an entire Gmail thread by thread ID", "email"),
-    ("Gmail", "gmail_search_messages", "Search Gmail messages using query syntax", "email"),
+    # Gmail (claude.ai connector — names verified live 2026-06-12)
+    ("claude_ai_Gmail", "search_threads", "Search Gmail threads using query syntax", "email"),
+    ("claude_ai_Gmail", "get_thread", "Read an entire Gmail thread by thread ID", "email"),
+    ("claude_ai_Gmail", "create_draft", "Create a draft email in Gmail with recipients, subject, and body", "email"),
+    ("claude_ai_Gmail", "list_drafts", "List draft emails in Gmail", "email"),
+    ("claude_ai_Gmail", "list_labels", "List all labels in Gmail", "email"),
+    ("claude_ai_Gmail", "create_label", "Create a new Gmail label", "email"),
+    ("claude_ai_Gmail", "label_thread", "Apply a label to a Gmail thread (also: label_message, unlabel_thread, unlabel_message)", "email"),
+
+    # Google Drive (claude.ai connector)
+    ("claude_ai_Google_Drive", "search_files", "Search files in Google Drive by name or content", "files"),
+    ("claude_ai_Google_Drive", "read_file_content", "Read the content of a Google Drive file (Docs, Sheets, text)", "files"),
+    ("claude_ai_Google_Drive", "list_recent_files", "List recently modified files in Google Drive", "files"),
+    ("claude_ai_Google_Drive", "create_file", "Create a new file in Google Drive", "files"),
+    ("claude_ai_Google_Drive", "copy_file", "Copy an existing Google Drive file", "files"),
+    ("claude_ai_Google_Drive", "get_file_metadata", "Get metadata (owner, dates, sharing) of a Google Drive file", "files"),
+    ("claude_ai_Google_Drive", "get_file_permissions", "Get sharing permissions of a Google Drive file", "files"),
+    ("claude_ai_Google_Drive", "download_file_content", "Download the raw content of a Google Drive file", "files"),
 
     # Todoist
     ("todoist", "add-tasks", "Create tasks in Todoist with content, priority (p1-p4), due dates, duration, and project assignment", "tasks"),
@@ -63,6 +72,23 @@ MCP_TOOLS = [
     ("todoist", "get-overview", "Get overview of Todoist workload and progress", "tasks"),
     ("todoist", "search", "Full-text search across all Todoist tasks and projects", "tasks"),
     ("todoist", "get-productivity-stats", "Get Todoist productivity statistics (karma, streaks)", "tasks"),
+    ("todoist", "uncomplete-tasks", "Reopen completed Todoist tasks", "tasks"),
+    ("todoist", "find-completed-tasks", "List completed Todoist tasks by date range or project", "tasks"),
+    ("todoist", "delete-object", "Delete a Todoist task, project, section, comment, or label", "tasks"),
+    ("todoist", "add-reminders", "Add reminders to Todoist tasks (time or location based)", "tasks"),
+    ("todoist", "find-reminders", "List reminders on Todoist tasks", "tasks"),
+    ("todoist", "add-goals", "Create goals in Todoist (weekly/monthly targets)", "tasks"),
+    ("todoist", "find-goals", "List Todoist goals and their progress", "tasks"),
+    ("todoist", "complete-goals", "Mark Todoist goals as completed", "tasks"),
+    ("todoist", "link-goal-tasks", "Link Todoist tasks to a goal for progress tracking", "tasks"),
+    ("todoist", "add-labels", "Create Todoist labels", "tasks"),
+    ("todoist", "update-labels", "Rename or recolor Todoist labels", "tasks"),
+    ("todoist", "add-filters", "Create saved filters in Todoist (query-based views)", "tasks"),
+    ("todoist", "find-filters", "List saved Todoist filters", "tasks"),
+    ("todoist", "find-activity", "Get Todoist activity log (recent changes, completions)", "tasks"),
+    ("todoist", "get-project-health", "Get health metrics for a Todoist project (overdue, stale tasks)", "tasks"),
+    ("todoist", "reorder-objects", "Reorder Todoist tasks, sections, or projects", "tasks"),
+    ("todoist", "project-move", "Move Todoist tasks or sections between projects", "tasks"),
 
     # Readwise
     ("readwise", "readwise_search_highlights", "Search book and article highlights in Readwise by meaning or keywords", "reading"),
@@ -73,10 +99,19 @@ MCP_TOOLS = [
     ("readwise", "reader_create_document", "Save a new document/URL to Readwise Reader", "reading"),
     ("readwise", "reader_get_document_highlights", "Get highlights from a specific Readwise Reader document", "reading"),
     ("readwise", "readwise_get_daily_review", "Get today's Readwise daily review highlights", "reading"),
+    ("readwise", "reader_move_documents", "Move Readwise Reader documents between locations (inbox, later, shortlist, archive) — used by /inbox triage", "reading"),
+    ("readwise", "reader_add_tags_to_document", "Add tags to a Readwise Reader document", "reading"),
+    ("readwise", "reader_remove_tags_from_document", "Remove tags from a Readwise Reader document", "reading"),
+    ("readwise", "reader_list_tags", "List all tags used in Readwise Reader", "reading"),
+    ("readwise", "reader_bulk_edit_document_metadata", "Bulk edit metadata (location, tags) of multiple Readwise Reader documents", "reading"),
+    ("readwise", "reader_export_documents", "Export Readwise Reader documents with content", "reading"),
+    ("readwise", "reader_set_highlight_notes", "Set or update notes on a Readwise Reader highlight", "reading"),
+    ("readwise", "readwise_create_highlights", "Create new highlights in Readwise manually", "reading"),
+    ("readwise", "readwise_update_highlight", "Update an existing Readwise highlight's text, note, or tags", "reading"),
 
-    # Context7
-    ("Context7", "resolve-library-id", "Resolve a library name to its Context7 ID for documentation lookup", "docs"),
-    ("Context7", "query-docs", "Query library documentation via Context7 for up-to-date code examples", "docs"),
+    # Context7 (claude.ai connector)
+    ("claude_ai_Context7", "resolve-library-id", "Resolve a library name to its Context7 ID for documentation lookup", "docs"),
+    ("claude_ai_Context7", "query-docs", "Query library documentation via Context7 for up-to-date code examples", "docs"),
 
     # haingt-brain (self-reference)
     ("haingt-brain", "brain_save", "Save a memory (decision, discovery, pattern, entity, preference) with semantic embedding", "memory"),
@@ -413,7 +448,7 @@ def main():
         ("find free time on calendar", None),
         ("create a task", None),
         ("write video script", "Bookie"),
-        ("create godot scene", "Wildtide"),
+        ("create godot scene", "chimera"),
         ("check financial health", "digital-identity"),
         ("find docs for fastapi", None),
     ]

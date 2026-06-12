@@ -14,7 +14,9 @@ Design contract:
 - Single batched chat completion call (not n calls)
 - Soft-fail on any error → return RRF top-n unchanged
 - LRU cache: full-set hash (judge calibrates against the candidate set)
-- Hard timeout 1500ms — never block recall longer than this
+- Candidates scored <= JUDGE_DROP_MAX (default 3) are DROPPED, not just
+  demoted — an empty recall beats confidently returned noise
+- Timeout JUDGE_TIMEOUT_S (default 6s) per API call; one flex->default retry
 """
 
 import hashlib
@@ -90,6 +92,24 @@ def _min_candidates() -> int:
         return int(os.environ.get("JUDGE_MIN_CANDIDATES", "4"))
     except ValueError:
         return 4
+
+
+def _drop_threshold() -> int:
+    """Judge scores at or below this are dropped from results entirely.
+    Rubric: 1-3 = surface keyword overlap only, contextually unrelated."""
+    try:
+        return int(os.environ.get("JUDGE_DROP_MAX", "3"))
+    except ValueError:
+        return 3
+
+
+def _timeout_s() -> float:
+    """Per-call API timeout. Telemetry showed p50 ~1.5-2.5s; 6s covers the
+    tail without letting a recall block for 10-20s like the old 10s x2 did."""
+    try:
+        return float(os.environ.get("JUDGE_TIMEOUT_S", "6.0"))
+    except ValueError:
+        return 6.0
 
 
 def _budget_usd() -> float:
@@ -310,18 +330,16 @@ def judge_relevance(
     if len(candidates) < _min_candidates():
         return candidates[:n], STATUS_MIN_CANDIDATES, telemetry
 
-    # Cache lookup
+    # Cache lookup. Key is a full-set hash, so a hit implies the identical
+    # candidate set — the cached order already reflects judge drops; do NOT
+    # re-append candidates missing from it (those were dropped as noise).
     cids = [c.get("id", "") for c in candidates]
     cache_key = _cache_key(query, cids)
     if cache_key in _judge_cache:
         _judge_cache.move_to_end(cache_key)
         cached_order = _judge_cache[cache_key]
-        # Reorder current candidates by cached score order
         by_id = {c.get("id", ""): c for c in candidates}
-        reordered = [by_id[cid] for cid in cached_order if cid in by_id]
-        # Append any candidates not in cache at the end (rare race condition)
-        extra = [c for c in candidates if c.get("id", "") not in cached_order]
-        result = (reordered + extra)[:n]
+        result = [by_id[cid] for cid in cached_order if cid in by_id][:n]
         telemetry["cache_hit"] = True
         return result, STATUS_OK, telemetry
 
@@ -336,11 +354,12 @@ def judge_relevance(
         {"role": "user", "content": user_prompt},
     ]
     used_flex = _service_tier() == "flex"
-    raw_resp, status = _chat_completion(messages=msgs, timeout=10.0)
+    timeout = _timeout_s()
+    raw_resp, status = _chat_completion(messages=msgs, timeout=timeout)
     # Flex tier is best-effort (50% off) → transient api_error/timeout/rate_limit
     # under load. Retry once on the reliable default tier before falling to RRF.
     if status in (STATUS_API_ERROR, STATUS_TIMEOUT, STATUS_RATE_LIMIT) and used_flex:
-        raw_resp, status = _chat_completion(messages=msgs, timeout=10.0, force_tier="default")
+        raw_resp, status = _chat_completion(messages=msgs, timeout=timeout, force_tier="default")
         if status == STATUS_OK:
             used_flex = False  # retry billed at full default-tier price
     telemetry["latency_ms"] = int((time.perf_counter() - t0) * 1000)
@@ -378,20 +397,29 @@ def judge_relevance(
             flex=flex_active,
         )
 
-    # Reorder candidates by judge score (descending). Candidates not scored
-    # fall to the end in original RRF order.
+    # Reorder candidates by judge score (descending), DROPPING anything at or
+    # below the threshold (rubric: <=3 = keyword-bait, contextually unrelated).
+    # Unscored candidates (length-mismatch tail) keep their RRF order at the
+    # end — defensive, never drop what the judge didn't actually score.
+    threshold = _drop_threshold()
     scored = []
     unscored = []
+    dropped = 0
     for c in candidates:
         cid = c.get("id", "")
         if cid in score_map:
-            scored.append((score_map[cid], c))
+            if score_map[cid] <= threshold:
+                dropped += 1
+            else:
+                scored.append((score_map[cid], c))
         else:
             unscored.append(c)
     scored.sort(key=lambda t: -t[0])
     ordered = [c for _, c in scored] + unscored
+    if _debug() and dropped:
+        print(f"[judge] dropped {dropped}/{len(candidates)} candidates <= {threshold}", file=sys.stderr)
 
-    # Cache result (store ID order for replay on identical query+pool)
+    # Cache result (post-drop ID order for replay on identical query+pool)
     _judge_cache[cache_key] = [c.get("id", "") for c in ordered]
     if len(_judge_cache) > _CACHE_MAX:
         _judge_cache.popitem(last=False)

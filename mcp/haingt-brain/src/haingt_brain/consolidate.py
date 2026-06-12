@@ -63,8 +63,19 @@ def _set_meta(conn: sqlite3.Connection, key: str, value: str) -> None:
     )
 
 
-def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
-    """Run all consolidation strategies. Returns a report of actions taken.
+def consolidate_all(
+    conn: sqlite3.Connection,
+    dry_run: bool = False,
+    strategies: set[str] | None = None,
+) -> dict:
+    """Run consolidation strategies. Returns a report of actions taken.
+
+    strategies: subset of {'merge', 'patterns', 'sessions', 'decay', 'cluster'}
+    to run; None = all. 'decay' covers decay_importance; 'patterns' covers
+    decay_patterns. NOTE (audit 2026-06-12): both decay strategies act on
+    last_accessed, which was systematically under-recorded until injection
+    telemetry landed — run them only after several weeks of accumulated
+    access data, or they will prune legitimate old memories.
 
     Includes a file-based lock (before circuit breaker) to prevent concurrent runs,
     and a circuit breaker: if consolidation has failed 3+ consecutive times,
@@ -89,7 +100,7 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
             }
 
         try:
-            result = _do_consolidate_all(conn, dry_run)
+            result = _do_consolidate_all(conn, dry_run, strategies)
             if not dry_run:
                 _set_meta(conn, "consolidation_failures", "0")
                 conn.commit()
@@ -104,8 +115,13 @@ def consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
             _release_lock()
 
 
-def _do_consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
+def _do_consolidate_all(
+    conn: sqlite3.Connection,
+    dry_run: bool = False,
+    strategies: set[str] | None = None,
+) -> dict:
     """Internal implementation of all consolidation strategies."""
+    run = strategies if strategies is not None else {"merge", "patterns", "sessions", "decay", "cluster"}
     report = {
         "duplicates_merged": 0,
         "patterns_decayed": 0,
@@ -113,29 +129,38 @@ def _do_consolidate_all(conn: sqlite3.Connection, dry_run: bool = False) -> dict
         "importance_decayed": 0,
         "weak_pruned": 0,
         "clusters_synthesized": 0,
+        "strategies_run": sorted(run),
         "details": [],
     }
 
-    r1 = merge_duplicates(conn, threshold=0.80, dry_run=dry_run)
-    report["duplicates_merged"] = r1["merged"]
-    report["details"].extend(r1["details"])
+    if "merge" in run:
+        # 0.95: only blatant double-saves. Dry-run at 0.88 (2026-06-12) showed
+        # formulaic-but-distinct records (IronCradle phase logs) at 0.89-0.93 —
+        # auto-merging those silently deletes distinct decisions.
+        r1 = merge_duplicates(conn, threshold=0.95, dry_run=dry_run)
+        report["duplicates_merged"] = r1["merged"]
+        report["details"].extend(r1["details"])
 
-    r2 = decay_patterns(conn, days_inactive=90, dry_run=dry_run)
-    report["patterns_decayed"] = r2["decayed"]
-    report["details"].extend(r2["details"])
+    if "patterns" in run:
+        r2 = decay_patterns(conn, days_inactive=90, dry_run=dry_run)
+        report["patterns_decayed"] = r2["decayed"]
+        report["details"].extend(r2["details"])
 
-    r3 = consolidate_sessions(conn, older_than_days=30, dry_run=dry_run)
-    report["sessions_consolidated"] = r3["consolidated"]
-    report["details"].extend(r3["details"])
+    if "sessions" in run:
+        r3 = consolidate_sessions(conn, older_than_days=30, dry_run=dry_run)
+        report["sessions_consolidated"] = r3["consolidated"]
+        report["details"].extend(r3["details"])
 
-    r4 = decay_importance(conn, dry_run=dry_run)
-    report["importance_decayed"] = r4["decayed"]
-    report["weak_pruned"] = r4["pruned"]
-    report["details"].extend(r4["details"])
+    if "decay" in run:
+        r4 = decay_importance(conn, dry_run=dry_run)
+        report["importance_decayed"] = r4["decayed"]
+        report["weak_pruned"] = r4["pruned"]
+        report["details"].extend(r4["details"])
 
-    r5 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65, dry_run=dry_run)
-    report["clusters_synthesized"] = r5["synthesized"]
-    report["details"].extend(r5["details"])
+    if "cluster" in run:
+        r5 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65, dry_run=dry_run)
+        report["clusters_synthesized"] = r5["synthesized"]
+        report["details"].extend(r5["details"])
 
     # Record consolidation timestamp
     _record_consolidation(conn)
@@ -357,6 +382,17 @@ def consolidate_sessions(
     for week_key, sessions in weeks.items():
         if len(sessions) < 2:
             continue  # Only consolidate if 2+ sessions in a week
+
+        # Idempotency guard (audit 2026-06-12): sessions are never marked
+        # consolidated and brain_save has no content dedup — without this
+        # check every run re-creates every weekly digest (the 2026-05 loop).
+        existing = conn.execute(
+            """SELECT 1 FROM memories
+               WHERE type = 'session' AND tags LIKE ? LIMIT 1""",
+            (f'%"{week_key}"%',),
+        ).fetchone()
+        if existing:
+            continue
 
         summaries = [s["summary"] for s in sessions if s["summary"]]
         if not summaries:

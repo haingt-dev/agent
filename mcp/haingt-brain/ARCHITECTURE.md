@@ -1,9 +1,23 @@
 # haingt-brain — Architecture Document
 
-> Last updated: 2026-04-02
-> Version: v4.1.0
+> Last updated: 2026-06-12 (system audit — see §0)
+> Version: v4.1.0 (+ 2026-06-12 audit patches)
 > Status: Production (single-user, daily use)
 > Origin: Applied concepts from DeepLearning.AI "Building Memory-Aware Agents" course
+> Maintenance: before trusting any section, verify against `hooks/hooks.json` + `ls src/haingt_brain/` — the 2026-06-12 audit found 14 drift points in the 04-02 version.
+
+## 0. Changelog — 2026-06-12 full-system audit
+
+Changes shipped (sections below may not reflect them yet — this block wins on conflict):
+
+- **Retrieval**: hybrid_search now EXCLUDES memories that are the target of a `supersedes` relation; results carry `fts_hit`/`vec_hit` (dual-source hit = empirically 100% precision tier, exposed as `dual_hit` in brain_recall). Near-duplicate pool dedup (cosine ≥ 0.92) runs before the judge in both brain_recall and prompt-context.py.
+- **Judge** (`judge.py`): candidates scored ≤ `JUDGE_DROP_MAX` (default 3) are DROPPED, not just demoted — empty recall beats confident noise. Noise gate in recall.py: on judge fallback, a pool with zero FTS hits returns []. API timeout now `JUDGE_TIMEOUT_S` (default 6s, was 10s ×2 → 11-15s outliers). Judge cache stores post-drop order.
+- **Injection telemetry**: prompt-context.py bumps access_count/last_accessed for every memory it actually injects — access_count finally measures the main consumption path. TYPE_PRIORITY: preference promoted to tier 0, entity demoted to tier 1 (stalest type in audit).
+- **Hooks**: `entity-extract.py` REMOVED from Stop (57% of its entities were paraphrase dups/stale facts; it resurrected retired project names). `stop-saveable.py` (suggest-only) stays. SessionStart `brain-context.py`: hot-tier/Preferences duplication fixed (was 45% wasted payload), truncation 120 → 200 chars at word boundary.
+- **Consolidation**: trigger moved out of the never-called `brain_session("start")` path (it had not run for 71 days; counter could never reach the gate). Now: `scripts/run_consolidation.py` (intended weekly cron Sunday 23:30 — cron entry pending owner approval; first run executed supervised 2026-06-12) runs `merge` (threshold 0.95 — 0.88 merged formulaic-but-distinct phase logs) + `sessions` (idempotency guard added: weeks already digested are skipped — root fix for the 2026-05 digest-loop class) + `cluster`. **`decay`/`patterns` strategies deferred**: compute_decay prunes a never-recalled 0.8-importance memory in ~60 days, and last_accessed was systematically under-recorded until injection telemetry landed. Re-evaluate ~4 weeks after 2026-06-12, retune the curve first.
+- **Toolbox**: rebuilt — 129 capabilities. Gmail/Calendar seeds renamed to live claude.ai connector names (old `gmail_*`/`gcal_*` were dead), Google Drive added, Todoist/Readwise topped up.
+- **Data cleanup**: 61 junk/stale entities deleted (echo-paraphrases, skill-invocation stubs, Wildtide resurrections), 3 seed entities corrected (ironcradle/godot/phase), 212 pre-compact session snapshots >14d purged (write-only data: 98% never recalled), project scopes migrated (`chimera-protocol`→`chimera`, `Learning-English`→`Learning_English`), 5 orphan vectors removed. DB: 1,856 → ~1,594 memories.
+- **Corrections to the 04-02 text**: importance.py / judge.py / vn_normalize.py are IMPLEMENTED (§16 lists importance as future); hook system = 6 events / 8 scripts incl. stop-saveable + replay_skip_gate (§6 says 5); config lives natively in `~/.claude/`, NOT `~/Projects/agent/global/` (§12); brain.db IS backed up daily via workstation-setup bundle cron (§15 says no backup); DB scale is ~1.6K memories, not ~70 (§15); core-memory.md ≈ 1.0-1.4K tokens, not ~480 (§12); plugin runs from the marketplace SOURCE directory (`~/Projects/agent/plugins/haint-core`), the `~/.claude/plugins/cache/.../4.1.0` copy is stale debris.
 
 ## 1. System Overview
 

@@ -5,13 +5,14 @@ Reads brain.db directly (no MCP needed) and outputs compact context.
 Target: ~300-500 tokens max.
 """
 
-import json
 import sqlite3
-import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path.home() / ".local" / "share" / "haingt-brain" / "brain.db"
+
+
+CLIP_CHARS = 200
 
 
 def _staleness_suffix(date_str: str | None) -> str:
@@ -29,13 +30,14 @@ def _staleness_suffix(date_str: str | None) -> str:
     return ""
 
 
-def get_project() -> str | None:
-    """Extract project from stdin JSON if available."""
-    try:
-        data = json.loads(sys.stdin.read())
-        return data.get("project")
-    except Exception:
-        return None
+def _clip(text: str, limit: int = CLIP_CHARS) -> str:
+    """Truncate at a word boundary so injected facts stay readable."""
+    if len(text) <= limit:
+        return text
+    cut = text.rfind(" ", 0, limit)
+    if cut < limit // 2:
+        cut = limit
+    return text[:cut] + "…"
 
 
 def query_context(project: str | None) -> str:
@@ -49,11 +51,12 @@ def query_context(project: str | None) -> str:
         return ""
 
     sections = []
+    emitted_ids: set[str] = set()
 
     # Hot-tier memories (importance >= 0.8, any age — timeless high-value)
     try:
         hot_rows = conn.execute(
-            """SELECT content, type, importance,
+            """SELECT id, content, type, importance,
                       COALESCE(updated_at, created_at) AS date FROM memories
                WHERE COALESCE(importance, 0.5) >= 0.8
                  AND type NOT IN ('tool', 'session')
@@ -63,8 +66,9 @@ def query_context(project: str | None) -> str:
             (project,),
         ).fetchall()
         if hot_rows:
+            emitted_ids.update(r["id"] for r in hot_rows)
             items = [
-                f"- [{r['type']}] {r['content'][:120]}{_staleness_suffix(r['date'])}"
+                f"- [{r['type']}] {_clip(r['content'])}{_staleness_suffix(r['date'])}"
                 for r in hot_rows
             ]
             sections.append("High-value (timeless):\n" + "\n".join(items))
@@ -74,7 +78,7 @@ def query_context(project: str | None) -> str:
     # Recent decisions (last 7 days, max 3) — ordered by importance then recency
     try:
         rows = conn.execute(
-            """SELECT content, COALESCE(updated_at, created_at) AS date FROM memories
+            """SELECT id, content, COALESCE(updated_at, created_at) AS date FROM memories
                WHERE type IN ('decision', 'discovery')
                  AND (project = ? OR project IS NULL)
                  AND created_at >= datetime('now', '-7 days')
@@ -85,23 +89,26 @@ def query_context(project: str | None) -> str:
                LIMIT 3""",
             (project,),
         ).fetchall()
+        rows = [r for r in rows if r["id"] not in emitted_ids]
         if rows:
-            items = [f"- {r['content'][:120]}{_staleness_suffix(r['date'])}" for r in rows]
+            emitted_ids.update(r["id"] for r in rows)
+            items = [f"- {_clip(r['content'])}{_staleness_suffix(r['date'])}" for r in rows]
             sections.append("Recent decisions:\n" + "\n".join(items))
     except Exception:
         pass
 
-    # Active preferences (max 3)
+    # Active preferences (max 3) — skip any already emitted by the hot tier
     try:
         rows = conn.execute(
-            """SELECT content, COALESCE(updated_at, created_at) AS date FROM memories
+            """SELECT id, content, COALESCE(updated_at, created_at) AS date FROM memories
                WHERE type = 'preference'
                  AND (project = ? OR project IS NULL)
-               ORDER BY updated_at DESC LIMIT 3""",
+               ORDER BY updated_at DESC LIMIT 6""",
             (project,),
         ).fetchall()
+        rows = [r for r in rows if r["id"] not in emitted_ids][:3]
         if rows:
-            items = [f"- {r['content'][:120]}{_staleness_suffix(r['date'])}" for r in rows]
+            items = [f"- {_clip(r['content'])}{_staleness_suffix(r['date'])}" for r in rows]
             sections.append("Preferences:\n" + "\n".join(items))
     except Exception:
         pass

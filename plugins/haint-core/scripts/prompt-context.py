@@ -77,13 +77,17 @@ CACHE_MAX_KEYWORDS = 30  # max accumulated context words from recent prompts
 CURRENT_PROMPT_MAX_CHARS = 1000  # current prompt keeps full text for embedding
 MIN_WORD_LEN = 3  # filter very short words (articles, particles)
 
-# Type priority: lower = higher priority in results
+# Type priority: lower = higher priority in results.
+# preference = highest-value type (curated feedback on how to work with Hải);
+# entity demoted one tier — auto-extracted entities proved the stalest type
+# in the 2026-06-12 audit (IronCradle "center of gravity" injected 200+ times
+# post-pivot).
 TYPE_PRIORITY = {
     "decision": 0,
     "discovery": 0,
     "pattern": 0,
-    "entity": 0,
-    "preference": 1,
+    "preference": 0,
+    "entity": 1,
     "session": 2,
 }
 
@@ -146,6 +150,15 @@ try:
 except Exception:
     _HAS_JUDGE = False
     _judge_relevance = None
+
+# Near-duplicate dedup for the retrieved pool (same fact saved 2-3x eats
+# injection slots). Soft-fails to the raw pool on import error.
+try:
+    from haingt_brain.search import dedup_pool as _dedup_pool
+    _HAS_DEDUP = True
+except Exception:
+    _HAS_DEDUP = False
+    _dedup_pool = None
 
 
 # ── Input ─────────────────────────────────────────────────────────────────
@@ -659,6 +672,26 @@ def connect_db(need_vec: bool = False) -> sqlite3.Connection | None:
         return None
 
 
+def _bump_injected_access(conn: sqlite3.Connection, ids: list[str]) -> None:
+    """Injection telemetry (audit 2026-06-12): hook injection is the brain's
+    main consumption path but never marked memories as accessed, making
+    access_count unusable for measuring utility. Bump on actual injection
+    only (skip-if-unchanged prompts don't re-bump)."""
+    if not ids:
+        return
+    try:
+        conn.executemany(
+            """UPDATE memories
+               SET access_count = access_count + 1,
+                   last_accessed = datetime('now')
+               WHERE id = ?""",
+            [(i,) for i in ids],
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 # ── Phase 1: General memories (hybrid FTS5 + vector RRF) ─────────────────
 
 def _fts_search(
@@ -933,6 +966,11 @@ if __name__ == "__main__":
         # Phase 1: General memories — over-fetch, dedup, judge, top-K, token cap
         general = search_general_hybrid(conn, combined, embedding, project)
         new_general = [r for r in general if r["id"] not in injected]
+        if _HAS_DEDUP and len(new_general) > 1:
+            try:
+                new_general = _dedup_pool(conn, new_general)
+            except Exception:
+                pass
         # Output gate: LLM judge filters by intent before top-K slice. Shares
         # JUDGE_ENABLED env toggle with Path A. Soft-fails to RRF order on error.
         # JUDGE_MIN_CANDIDATES (default 4) gates against tiny pools internally.
@@ -971,6 +1009,7 @@ if __name__ == "__main__":
             new_ids.update(r["id"] for r in capped_general)
             new_chars += capped_chars
             memory_ids_to_save = current_memory_ids
+            _bump_injected_access(conn, current_memory_ids)
 
         # Phase 2: Semantic Toolbox — FTS5 pre-filter, fall back to vector if needed
         # Tools refresh per-prompt (no dedup), but skip injection when results identical

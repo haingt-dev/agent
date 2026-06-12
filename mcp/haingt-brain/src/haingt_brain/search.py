@@ -1,9 +1,18 @@
 """Hybrid search using Reciprocal Rank Fusion (FTS5 + sqlite-vec)."""
 
+import math
 import sqlite3
+import struct
 
 from .db import serialize_embedding
 from .embeddings import embed_text
+
+# Memories explicitly replaced via a `supersedes` relation are dead weight in
+# results: the replacement carries the current fact, the target carries the
+# stale one. Lineage stays in the relations table; retrieval skips the target.
+SUPERSEDED_FILTER = (
+    "m.id NOT IN (SELECT target_id FROM relations WHERE relation_type = 'supersedes')"
+)
 
 
 def hybrid_search(
@@ -29,7 +38,7 @@ def hybrid_search(
     emb_bytes = serialize_embedding(query_embedding)
 
     # Build type/project/time filter clause
-    filters = []
+    filters = [SUPERSEDED_FILTER]
     params: dict = {}
     if memory_type:
         filters.append("m.type = :type")
@@ -40,7 +49,7 @@ def hybrid_search(
     if time_range:
         filters.append("m.created_at >= datetime('now', :time_range)")
         params["time_range"] = time_range
-    where_clause = " AND ".join(filters) if filters else "1=1"
+    where_clause = " AND ".join(filters)
 
     sql = f"""
     WITH fts_results AS (
@@ -61,12 +70,14 @@ def hybrid_search(
     scored AS (
         SELECT
             COALESCE(f.memory_id, v.memory_id) AS memory_id,
+            (f.memory_id IS NOT NULL) AS fts_hit,
+            (v.memory_id IS NOT NULL) AS vec_hit,
             COALESCE(1.0 / (:rrf_k + f.fts_pos), 0) +
             COALESCE(1.0 / (:rrf_k + v.vec_pos), 0) AS rrf_score
         FROM fts_results f
         FULL OUTER JOIN vec_results v ON f.memory_id = v.memory_id
     )
-    SELECT m.*,
+    SELECT m.*, s.fts_hit, s.vec_hit,
            s.rrf_score * (0.5 + 0.5 * COALESCE(m.importance, 0.5)) AS rrf_score
     FROM scored s
     JOIN memories m ON m.id = s.memory_id
@@ -93,6 +104,61 @@ def hybrid_search(
     return [dict(row) for row in rows]
 
 
+def _cosine_bytes(a_bytes: bytes, b_bytes: bytes) -> float:
+    """Cosine similarity between two raw float32 embedding buffers."""
+    n = len(a_bytes) // 4
+    a = struct.unpack(f"{n}f", a_bytes)
+    b = struct.unpack(f"{n}f", b_bytes)
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def dedup_pool(
+    conn: sqlite3.Connection,
+    pool: list[dict],
+    threshold: float = 0.92,
+) -> list[dict]:
+    """Drop near-duplicate candidates from an oversampled pool.
+
+    Audit 2026-06-12: ~17% of judged top-5 slots were the same fact saved
+    2-3 times. Keeps the first occurrence (pool arrives RRF-ranked, so the
+    strongest representative survives); duplicates are hidden from this
+    result only, never deleted. O(n²) cosine over a pool capped at 12.
+    """
+    if len(pool) < 2:
+        return pool
+    embs: dict[str, bytes] = {}
+    for c in pool:
+        cid = c.get("id")
+        if not cid:
+            continue
+        try:
+            row = conn.execute(
+                "SELECT embedding FROM memory_vectors WHERE memory_id = ?", (cid,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return pool  # vec table unavailable — skip dedup
+        if row:
+            embs[cid] = row[0]
+    kept: list[dict] = []
+    for c in pool:
+        emb = embs.get(c.get("id", ""))
+        is_dup = False
+        if emb is not None:
+            for k in kept:
+                k_emb = embs.get(k.get("id", ""))
+                if k_emb is not None and _cosine_bytes(emb, k_emb) >= threshold:
+                    is_dup = True
+                    break
+        if not is_dup:
+            kept.append(c)
+    return kept
+
+
 def vector_search(
     conn: sqlite3.Connection,
     query_embedding: list[float],
@@ -104,7 +170,7 @@ def vector_search(
     """Pure vector search fallback."""
     emb_bytes = serialize_embedding(query_embedding)
 
-    filters = []
+    filters = [SUPERSEDED_FILTER]
     params: dict = {}
     if memory_type:
         filters.append("m.type = :type")
@@ -115,10 +181,10 @@ def vector_search(
     if time_range:
         filters.append("m.created_at >= datetime('now', :time_range)")
         params["time_range"] = time_range
-    where_clause = " AND ".join(filters) if filters else "1=1"
+    where_clause = " AND ".join(filters)
 
     sql = f"""
-    SELECT m.*, v.distance
+    SELECT m.*, 0 AS fts_hit, 1 AS vec_hit, v.distance
     FROM memory_vectors v
     JOIN memories m ON m.id = v.memory_id
     WHERE v.embedding MATCH :embedding

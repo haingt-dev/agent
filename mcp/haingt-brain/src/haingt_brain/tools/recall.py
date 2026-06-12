@@ -24,7 +24,7 @@ from ..judge import (
     judge_relevance,
     update_budget,
 )
-from ..search import hybrid_search
+from ..search import dedup_pool, hybrid_search
 
 
 def _oversample_k(k: int) -> int:
@@ -97,6 +97,12 @@ def brain_recall(
     pool_k = _oversample_k(k)
     pool = hybrid_search(conn, query, memory_type, project, pool_k, time_range=time_range)
 
+    # Stage 1.5: Drop near-duplicate saves so they don't eat top-n slots
+    try:
+        pool = dedup_pool(conn, pool)
+    except Exception:
+        pass
+
     # Stage 2: Budget gate — skip judge if daily limit exceeded
     judge_status = STATUS_DISABLED
     telemetry = {"tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "latency_ms": 0, "cache_hit": False}
@@ -108,6 +114,20 @@ def brain_recall(
     else:
         # Stage 3: LLM judge rerank (no-op if JUDGE_ENABLED=false or pool too small)
         results, judge_status, telemetry = judge_relevance(query, pool, k)
+
+    # Stage 3.5: Noise gate for unvetted results. When the judge didn't run
+    # (disabled/budget/timeout/parse error), pure vector neighbors on a novel
+    # topic look confident but measured 10/10 irrelevant on adversarial
+    # queries. Without a single FTS term match in the pool, return nothing —
+    # an empty recall is strictly better than injected noise. Only applies
+    # when hit-source info is present (callers bypassing hybrid_search skip it).
+    if (
+        judge_status != STATUS_OK
+        and results
+        and any("fts_hit" in r for r in results)
+        and not any(r.get("fts_hit") for r in results)
+    ):
+        results = []
 
     # Stage 4: Bump access_count on FINAL top-n only (not the oversampled pool)
     final_ids = [r["id"] for r in results if r.get("id")]
@@ -135,6 +155,10 @@ def brain_recall(
             entry["metadata"] = json.loads(r["metadata"]) if isinstance(r["metadata"], str) else r["metadata"]
         if r.get("rrf_score"):
             entry["relevance"] = round(r["rrf_score"], 4)
+        # Dual-source hits (FTS + vector) measured 100% precision in eval —
+        # surface the tier so consumers can trust them above the flat RRF band.
+        if r.get("fts_hit") is not None:
+            entry["dual_hit"] = bool(r.get("fts_hit")) and bool(r.get("vec_hit"))
         formatted.append(entry)
 
     # Attach judge_status as a top-level field on the first entry (signal carrier)

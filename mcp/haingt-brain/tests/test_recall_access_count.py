@@ -178,3 +178,41 @@ def test_judge_telemetry_updates_brain_meta(db, monkeypatch):
     ).fetchone()
     assert fallback_row is not None
     assert int(fallback_row["value"]) == 2  # both went through disabled fallback
+
+
+def test_noise_gate_drops_vector_only_pool_when_judge_off(db, monkeypatch):
+    """Fallback path + zero FTS hits in pool → empty result (noise gate)."""
+    from haingt_brain.tools import recall as recall_mod
+
+    def vector_only_pool(conn, q, mt, p, k, time_range=None):
+        pool = _fake_pool(conn, [f"m{i:02d}" for i in range(k)])
+        for c in pool:
+            c["fts_hit"] = 0
+            c["vec_hit"] = 1
+        return pool
+
+    monkeypatch.setattr(recall_mod, "hybrid_search", vector_only_pool)
+    monkeypatch.setenv("JUDGE_ENABLED", "false")
+
+    results = recall_mod.brain_recall(db, "kubernetes ingress", k=5)
+    assert results == []
+
+
+def test_noise_gate_keeps_pool_with_fts_corroboration(db, monkeypatch):
+    """Fallback path + at least one FTS hit → results pass through, dual_hit set."""
+    from haingt_brain.tools import recall as recall_mod
+
+    def mixed_pool(conn, q, mt, p, k, time_range=None):
+        pool = _fake_pool(conn, [f"m{i:02d}" for i in range(k)])
+        for i, c in enumerate(pool):
+            c["fts_hit"] = 1 if i == 0 else 0
+            c["vec_hit"] = 1
+        return pool
+
+    monkeypatch.setattr(recall_mod, "hybrid_search", mixed_pool)
+    monkeypatch.setenv("JUDGE_ENABLED", "false")
+
+    results = recall_mod.brain_recall(db, "godot", k=5)
+    assert len(results) == 5
+    assert results[0]["dual_hit"] is True
+    assert results[1]["dual_hit"] is False
