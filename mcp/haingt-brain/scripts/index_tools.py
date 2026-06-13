@@ -167,6 +167,76 @@ MCP_TOOLS = [
     ("st", "st_get_worldinfo", "Read a SillyTavern World Info lorebook by name — entries + metadata.", "sillytavern"),
     ("st", "st_save_worldinfo", "Overwrite a SillyTavern World Info lorebook (full data dict) — read first to merge rather than blow away entries.", "sillytavern"),
     ("st", "st_get_recent_chat", "List recent chat sessions for a SillyTavern character (metadata: file, size, last message).", "sillytavern"),
+
+    # Aseprite (project-scoped → chimera; the pixel-art ASSEMBLY + QA layer, driving Steam
+    # Aseprite 1.3.17.2 fully headless via the diivi/aseprite-mcp 103-tool build. Captured
+    # live 2026-06-13 from a chimera session. CURATED to the task-discoverable jobs in
+    # art-pipeline.md §4.5 — the ~67 omitted tools are granular siblings (no-suffix draw
+    # variants, per-cel/-frame/-slice/-tile getters+setters, region/onion-skin/merge/flip/
+    # rotate primitives) folded into the descriptions below; reach for them via §4.5 once
+    # in-flow. Standing law: FLAT layers only (group-blind), RGB masters only for palette/
+    # read ops, trust result-text not transport-ok. NOT a generator — NINE/enemies stay on
+    # the SD pipeline; this is assembly/QA. Full verified table + guardrails = §4.5.)
+    ("aseprite", "create_canvas", "Create a new Aseprite sprite/canvas (always RGB) — scaffold a sprite at a given size. Silently overwrites an existing file; copy_sprite first. Tạo file sprite mới.", "pixelart"),
+    ("aseprite", "copy_sprite", "Duplicate an Aseprite sprite file — make a backup before editing a production master (create_canvas/crop_canvas overwrite silently).", "pixelart"),
+    ("aseprite", "resize_canvas", "Resize an Aseprite canvas — it SCALES the content (e.g. 2× nearest-neighbor marketing upscale), it is NOT a pad/extend (enlarging smears pixel art).", "pixelart"),
+    ("aseprite", "set_color_mode", "Convert an Aseprite sprite's color mode (rgb / grayscale / indexed) — go indexed only as the LAST export step (destructive nearest-snap on off-palette pixels).", "pixelart"),
+    ("aseprite", "add_layer", "Add a new flat layer to an Aseprite sprite (no layer groups — group-nested layers are invisible to the checked tools).", "pixelart"),
+    ("aseprite", "import_image_as_layer", "Import a PNG/image into an Aseprite sprite as a new layer at an exact offset — Stage-2 PNG → master import.", "pixelart"),
+    ("aseprite", "copy_layers_between_sprites", "Copy named layers from one Aseprite sprite into another, pixel-exact — the PNG→master import (a PNG's single layer is named 'Layer'; no size guard, check dims first). Import ảnh SD vào master sprite.", "pixelart"),
+    ("aseprite", "add_frames", "Add animation frames to an Aseprite sprite — frames are DUPLICATED from the source (clear_cel after for blanks). Thêm frame animation.", "pixelart"),
+    ("aseprite", "set_frame_duration_all", "Set the duration in ms of every frame in an Aseprite sprite at once (single frame = set_frame_duration).", "pixelart"),
+    ("aseprite", "set_tag", "Create/update an animation tag — a named frame range + direction (forward/reverse/pingpong) on an Aseprite sprite. Build ALL frames before tagging (bounds are strict). Sibling: delete_tag.", "pixelart"),
+    ("aseprite", "copy_cel", "Copy a cel between Aseprite frames/layers — replace defaults TRUE (overwrites target); pass replace=false to preserve. The per-frame cel-build primitive (with copy_frame, propagate_frame_to_range).", "pixelart"),
+    ("aseprite", "set_cel_position", "Set/move an Aseprite cel's position — manual cel-shift animation (eased motion = tween_cel_positions_eased; offset across frames = offset_cel_positions).", "pixelart"),
+    ("aseprite", "tween_cel_positions_eased", "Tween an Aseprite cel's position across a frame range with easing — smooth motion (pass create_missing_cels=true). Siblings: tween_cel_opacity_eased (fade), tween_cel_scale_eased (DESTRUCTIVE — own FX layer).", "pixelart"),
+    ("aseprite", "oscillate_cel_positions", "Oscillate Aseprite cel positions across frames on a sine wave — bob/sway/idle loop (amplitude + cycles + phase).", "pixelart"),
+    ("aseprite", "outline_cel", "Draw an outline around the opaque content of an Aseprite cel (normalize-safe).", "pixelart"),
+    ("aseprite", "apply_dither_gradient", "Apply a dithered gradient in Aseprite — on-palette, normalize-safe shading. PREFER over apply_gradient_rect (which clips silently); sibling apply_dither_pattern for pattern fills.", "pixelart"),
+    ("aseprite", "draw_pixels", "Draw a batch of individual pixels in Aseprite from an {x,y,color} list — the freehand / ASCII-grid workflow (#RRGGBB only, no alpha). Targeted geometric draws = the draw_*_at variants (line/rectangle/circle/ellipse/fill_area).", "pixelart"),
+    ("aseprite", "remap_colors_in_cel_range", "Remap exact colors across an Aseprite layer/frame range via explicit mappings — the corruption value-band swap (bright→dark, §9.1). False-succeeds silently — readback-verify every call. Đổi màu corruption.", "pixelart"),
+    ("aseprite", "generate_color_ramp", "Generate a hue-shifted dark→light shading ramp from a base color in Aseprite — color-blind value ramps (keep lightness_range ≤0.5 or the darkest step clamps to #000000). Returns a hex array.", "pixelart"),
+    ("aseprite", "replace_color", "Replace one exact color with another in an Aseprite sprite (tolerance, checked path). Siblings: adjust_hsl (shift H/S/L), erase_color (delete a color).", "pixelart"),
+    ("aseprite", "adjust_hsl", "Shift the hue/saturation/lightness of colors in an Aseprite cel range (byte-exact).", "pixelart"),
+    ("aseprite", "set_palette", "Set/replace an Aseprite sprite's color palette. Siblings: get_palette (read), apply_palette_preset + list_palette_presets (built-in presets).", "pixelart"),
+    ("aseprite", "quantize_to_palette", "Snap every pixel of an Aseprite sprite to the nearest palette color (RGB distance) — machine palette enforcement (§9.1), run after set_palette/apply_palette_preset. RGB-only; verify unique_colors == palette size. Ép palette / quantize.", "pixelart"),
+    ("aseprite", "get_color_stats", "Get color statistics of an Aseprite sprite — accurate unique-color count, sees inside groups (the palette-audit instrument). RGB-only. Đếm màu / audit palette.", "pixelart"),
+    ("aseprite", "compare_frames", "Diff two Aseprite frames pixel-by-pixel — returns changed-pixel count, percent, and the bounding box of the change. Animation QA oracle (confirm a frame actually changed / not too much).", "pixelart"),
+    ("aseprite", "audit_animation", "Audit an Aseprite animation — per-layer/per-frame cel report for QA (flat layers only; populated JSON since PR#12).", "pixelart"),
+    ("aseprite", "animation_sanitize", "Enforce frame-lock in Aseprite — detect cels outside the allowed layer/frame ranges and zero them (keep the default set_opacity_zero; delete_cels is destructive).", "pixelart"),
+    ("aseprite", "validate_scene", "Validate an Aseprite sprite's layer/frame/tag structure for QA (flat layers only).", "pixelart"),
+    ("aseprite", "get_sprite_info", "Get Aseprite sprite metadata — size, layers, frames, tags (QA readback; flat layers only).", "pixelart"),
+    ("aseprite", "get_pixel_color", "Read the color of a single pixel in an Aseprite sprite — readback-verify after unchecked draws (RGB-only; pass an explicit layer_name). Bulk read = get_pixels_rect.", "pixelart"),
+    ("aseprite", "create_slice", "Create a named slice (a rectangular game-engine region / 9-patch / atlas frame) in an Aseprite sprite — never use '|' in the name. Siblings: set_slice_center (9-patch), set_slice_pivot, list_slices, delete_slice.", "pixelart"),
+    ("aseprite", "create_tilemap_layer", "Create a tilemap layer with its own tileset in Aseprite — level/tileset authoring (tile index 0 = empty). Siblings: draw_on_tile, set_tiles, get_tile_at, get_tilemap_info.", "pixelart"),
+    ("aseprite", "export_sprite", "Export an Aseprite sprite to PNG (multi-frame fans out to name1..N.png, digit-free basenames). Xuất PNG.", "pixelart"),
+    ("aseprite", "export_layers", "Export each Aseprite layer as its own PNG — native --split-layers, the one export that PIERCES groups (incl. group children).", "pixelart"),
+    ("aseprite", "export_spritesheet", "Export an Aseprite sprite as a packed spritesheet + JSON atlas (validates the tag). Xuất spritesheet.", "pixelart"),
+    ("aseprite", "run_lua_script", "Run arbitrary Aseprite Lua in batch mode — the escape hatch + only group-aware inspect/edit path (reproduces celdump/palette_audit). Does NOT auto-save (spr:saveAs required) and returns BLANK on error (use print() markers to verify).", "pixelart"),
+]
+
+# ── Plugin-bundled MCP Tools ─────────────────────────────────────────────────
+# MCP servers that ship INSIDE a marketplace plugin (the plugin's own .mcp.json),
+# NOT in ~/.claude.json or a project .mcp.json — so _mcp_server_scopes() cannot see them.
+# Claude Code registers them as `plugin_<pluginName>_<serverName>` (the godot-dev plugin's
+# "godot" server → plugin_godot-dev_godot). Curated like MCP_TOOLS; scope is resolved by
+# discover_plugin_mcp_scopes() from installed_plugins.json + per-project enabledPlugins, so
+# a plugin enabled in N projects yields one tool entry PER project (the single-scope
+# _mcp_server_scopes() dict can't express multi-project availability). Captured live
+# 2026-06-13 from a chimera session. Each entry: (plugin_name, server, tool, desc, category).
+# godot-mcp = Coding-Solo @coding-solo/godot-mcp; skipped UID/meta/3D plumbing (get_uid,
+# update_project_uids, get_godot_version, list_projects, export_mesh_library). Usage law +
+# probe caveats = tech.md "Godot MCP" (e.g. NEVER --headless --write-movie: segfault).
+PLUGIN_MCP_TOOLS = [
+    ("godot-dev", "godot", "create_scene", "Create a new Godot scene (.tscn) with a chosen root node type (Node2D/Node3D/Control) — scaffold a scene file.", "godot"),
+    ("godot-dev", "godot", "add_node", "Add a node to an existing Godot scene (e.g. Sprite2D, CollisionShape2D, Area2D, AnimationPlayer) under a parent path, with optional properties.", "godot"),
+    ("godot-dev", "godot", "save_scene", "Save changes to a Godot scene file (optionally to a new path to create a variant).", "godot"),
+    ("godot-dev", "godot", "load_sprite", "Load a texture/image into a Sprite2D node in a Godot scene — set the sprite's texture.", "godot"),
+    ("godot-dev", "godot", "run_project", "Run a Godot project (optionally a specific scene) and capture its output — launch the game to test it. Chạy thử game Godot.", "godot"),
+    ("godot-dev", "godot", "stop_project", "Stop the currently running Godot project.", "godot"),
+    ("godot-dev", "godot", "get_debug_output", "Get the current Godot debug output and errors from the running project — read runtime logs / stack traces.", "godot"),
+    ("godot-dev", "godot", "launch_editor", "Launch the Godot editor GUI for a project.", "godot"),
+    ("godot-dev", "godot", "get_project_info", "Retrieve metadata about a Godot project — engine version, settings, structure.", "godot"),
 ]
 
 # ── CLI Tools ──────────────────────────────────────────────────────────────
@@ -465,6 +535,61 @@ def discover_plugin_skills() -> list[dict]:
     return out
 
 
+def discover_plugin_mcp_scopes() -> dict:
+    """Map a plugin-bundled MCP server (composed name `plugin_<plugin>_<server>`) → the list
+    of project scopes where it's available ([None] = global/user-scope plugin).
+
+    The companion to discover_plugin_skills for the MCP side: _mcp_server_scopes() only reads
+    ~/.claude.json + ~/Projects/<p>/.mcp.json, so a server shipped in a plugin's OWN .mcp.json
+    is invisible to it. Reads installed_plugins.json, opens each install's .mcp.json for its
+    server names, and gates by scope + enablement exactly like discover_plugin_skills. Returns
+    a LIST of scopes per server (not a single one) because a plugin enabled in N projects makes
+    its server available in all N — the indexer then saves one tool entry per project.
+    """
+    installed_file = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not installed_file.exists():
+        return {}
+    try:
+        installed = json.loads(installed_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    global_enabled = _global_enabled_plugins()
+    out: dict[str, list[str | None]] = {}
+
+    for plugin_key, records in installed.get("plugins", {}).items():
+        plugin_name = plugin_key.split("@", 1)[0]
+        for rec in records:
+            scope = rec.get("scope")
+            mcp_file = Path(rec.get("installPath", "")) / ".mcp.json"
+            if not mcp_file.exists():
+                continue
+            try:
+                servers = json.loads(mcp_file.read_text(encoding="utf-8")).get("mcpServers", {})
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not servers:
+                continue
+            # Resolve which project this install serves + whether the plugin is enabled there.
+            if scope == "user":
+                if not global_enabled.get(plugin_key, False):
+                    continue
+                proj: str | None = None
+            elif scope == "project":
+                pp = rec.get("projectPath")
+                if not pp or not _project_enables_plugin(pp, plugin_key):
+                    continue
+                proj = Path(pp).name
+            else:
+                continue
+            for server in servers:
+                composed = f"plugin_{plugin_name}_{server}"
+                bucket = out.setdefault(composed, [])
+                if proj not in bucket:
+                    bucket.append(proj)
+    return out
+
+
 # ── MCP Server Scoping ─────────────────────────────────────────────────────
 
 def _mcp_server_scopes() -> dict:
@@ -571,6 +696,37 @@ def main():
         )
         print(f"  + {mcp_server}/{tool_name}" + (f" [{proj}]" if proj else ""))
 
+    # Index plugin-bundled MCP tools — servers shipped inside a marketplace plugin's own
+    # .mcp.json (invisible to _mcp_server_scopes()). Scope comes from the plugin's install
+    # records; a server enabled in N projects is saved once per project so brain_tools never
+    # suggests it where the plugin isn't enabled.
+    plugin_mcp_scopes = discover_plugin_mcp_scopes()
+    plugin_mcp_count = 0
+    print(f"\nIndexing plugin-bundled MCP tools ({len(PLUGIN_MCP_TOOLS)} curated)...")
+    for plugin_name, server, tool_name, description, category in PLUGIN_MCP_TOOLS:
+        composed = f"plugin_{plugin_name}_{server}"
+        projects = plugin_mcp_scopes.get(composed)
+        if not projects:
+            print(f"  ! skip {composed}/{tool_name} — plugin not installed/enabled anywhere")
+            continue
+        content = f"{tool_name}: {description}"
+        for proj in projects:
+            brain_save(
+                conn, content, "tool",
+                tags=[composed, tool_name, category],
+                project=proj,
+                metadata={
+                    "protocol": "mcp",
+                    "server": composed,
+                    "name": tool_name,
+                    "category": category,
+                    "scope": proj or "global",
+                    "plugin": plugin_name,
+                },
+            )
+            plugin_mcp_count += 1
+            print(f"  + {composed}/{tool_name}" + (f" [{proj}]" if proj else " [global]"))
+
     # Auto-discover and index skills
     skills = discover_skills()
     global_skills = [s for s in skills if s["project"] is None]
@@ -665,9 +821,11 @@ def main():
         for oid in old_tool_ids:
             brain_forget(conn, oid)
 
-    total = len(MCP_TOOLS) + len(skills) + len(NATIVE_SKILLS) + len(plugin_skills) + len(CLI_TOOLS)
+    total = (len(MCP_TOOLS) + plugin_mcp_count + len(skills) + len(NATIVE_SKILLS)
+             + len(plugin_skills) + len(CLI_TOOLS))
     print(f"\nDone! Indexed {total} capabilities into Semantic Toolbox.")
     print(f"  MCP tools: {len(MCP_TOOLS)}")
+    print(f"  Plugin-bundled MCP tools: {plugin_mcp_count}")
     print(f"  Skills: {len(skills)} ({len(global_skills)} global + {len(project_skills)} project)")
     print(f"  Native skills: {len(NATIVE_SKILLS)}")
     print(f"  Plugin skills: {len(plugin_skills)} ({sum(1 for s in plugin_skills if s['project'] is None)} global + {sum(1 for s in plugin_skills if s['project'])} project)")
@@ -698,6 +856,8 @@ def main():
         ("what books do I own about pixel art", None),
         ("create a new skill from scratch and run evals", None),
         ("debug a gdscript null-reference error in godot", "chimera"),
+        ("create a new godot scene with a Node2D root", "chimera"),
+        ("quantize a sprite to its palette in aseprite", "chimera"),
     ]
     for query, project in tests:
         results = brain_tools(conn, query, k=1, project=project)
@@ -719,6 +879,15 @@ def main():
         ("save this article to my reading list and tag it", "digital-identity", "reader", True),
         ("save this article to my reading list and tag it", "chimera", "reader", False),
         ("save this article to my reading list and tag it", "Bookie", "reader", False),
+        # plugin-bundled godot MCP tools — chimera+IronCradle only (godot-dev plugin scope)
+        ("create a new godot scene and add a sprite node", "chimera", "create_scene", True),
+        ("create a new godot scene and add a sprite node", "IronCradle", "create_scene", True),
+        ("create a new godot scene and add a sprite node", "digital-identity", "create_scene", False),
+        ("create a new godot scene and add a sprite node", "Bookie", "create_scene", False),
+        # aseprite MCP tools — chimera only
+        ("quantize a sprite to its palette and audit colors", "chimera", "quantize", True),
+        ("quantize a sprite to its palette and audit colors", "IronCradle", "quantize", False),
+        ("quantize a sprite to its palette and audit colors", "digital-identity", "quantize", False),
     ]
     scope_ok = True
     for query, proj, needle, expect in scope_cases:
