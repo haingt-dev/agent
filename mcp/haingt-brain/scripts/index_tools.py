@@ -58,7 +58,7 @@ MCP_TOOLS = [
     # Todoist
     ("todoist", "add-tasks", "Create tasks in Todoist with content, priority (p1-p4), due dates, duration, and project assignment", "tasks"),
     ("todoist", "update-tasks", "Update existing Todoist tasks — priority, description, labels. Do NOT use for rescheduling.", "tasks"),
-    ("todoist", "reschedule-tasks", "Reschedule Todoist task due dates. Preserves recurring schedules. Use YYYY-MM-DD format.", "tasks"),
+    ("todoist", "reschedule-tasks", "Move / reschedule a Todoist task to a new due date — move to next Friday, push to tomorrow, bump to Monday, postpone, defer (dời/đẩy lịch task sang ngày khác). Changes WHEN a task is due; preserves recurring schedules; YYYY-MM-DD.", "tasks"),
     ("todoist", "complete-tasks", "Mark Todoist tasks as completed", "tasks"),
     ("todoist", "find-tasks", "Search and filter Todoist tasks by project, label, priority, or text", "tasks"),
     ("todoist", "find-tasks-by-date", "Find Todoist tasks due on a specific date or date range", "tasks"),
@@ -88,7 +88,7 @@ MCP_TOOLS = [
     ("todoist", "find-activity", "Get Todoist activity log (recent changes, completions)", "tasks"),
     ("todoist", "get-project-health", "Get health metrics for a Todoist project (overdue, stale tasks)", "tasks"),
     ("todoist", "reorder-objects", "Reorder Todoist tasks, sections, or projects", "tasks"),
-    ("todoist", "project-move", "Move Todoist tasks or sections between projects", "tasks"),
+    ("todoist", "project-move", "Relocate Todoist tasks or sections to a DIFFERENT PROJECT/list (move between projects — NOT for changing due dates; use reschedule-tasks for dates).", "tasks"),
 
     # Readwise
     ("readwise", "readwise_search_highlights", "Search book and article highlights in Readwise by meaning or keywords", "reading"),
@@ -130,6 +130,32 @@ CLI_TOOLS = [
     ("chub search", "Search curated LLM-optimized docs and skills for libraries/frameworks. Usage: chub search [query] --json", "docs"),
     ("chub get", "Fetch curated documentation by ID with language variant. Usage: chub get <id> --lang py|js", "docs"),
     ("chub annotate", "Attach persistent notes to a doc or skill for future sessions. Usage: chub annotate [id] [note]", "docs"),
+]
+
+
+# ── Native (binary-bundled) Skills ──────────────────────────────────────────
+# Built into the Claude Code binary — NO filesystem SKILL.md, so they can't be
+# auto-discovered like user/project/plugin skills. Manually curated here, same as
+# MCP_TOOLS/CLI_TOOLS. Indexed with protocol="native-skill" so the filesystem
+# drift check (which only validates protocol="skill") never flags them as stale.
+# Re-verify this list against the available-skills list when the CC binary updates.
+# Each entry: (name, description, category)
+
+NATIVE_SKILLS = [
+    ("deep-research", "Research any topic on the web — look into / investigate / find out the latest on X, market & competitor research; deep multi-source fact-checked report (fan-out web search, fetch sources, adversarial 3-vote verify, cited synthesis). VN: nghiên cứu, tìm hiểu sâu, điều tra, khảo sát.", "research"),
+    ("code-review", "Review the current git diff/branch for correctness bugs and reuse/simplification/efficiency cleanups at a chosen effort level (low to ultra). Can post inline PR comments or apply fixes.", "development"),
+    ("simplify", "Review changed code for reuse, simplification, efficiency, and altitude cleanups, then apply the fixes. Quality cleanup only — does not hunt bugs (use /code-review for that).", "development"),
+    ("security-review", "Security review of the pending changes on the current branch — find vulnerabilities, injection, auth/secret exposure in the diff.", "development"),
+    ("review", "Review a pull request — read the PR diff and leave structured review feedback.", "development"),
+    ("verify", "Verify a code change actually works by running the app and observing behavior — confirm a fix/PR/feature works, validate local changes before pushing.", "development"),
+    ("run", "Launch and drive this project's app to see a change working — run/start/screenshot the app, confirm a change works in the real app (not just tests).", "development"),
+    ("init", "Initialize a new CLAUDE.md file documenting the codebase for Claude Code.", "development"),
+    ("claude-api", "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, prompt caching, token counting, model migration. For building on Claude/Anthropic.", "reference"),
+    ("update-config", "Configure the Claude Code harness via settings.json — hooks for automated behaviors (when X do Y), permissions/allowlists, env vars, hook troubleshooting.", "harness"),
+    ("keybindings-help", "Customize Claude Code keyboard shortcuts — rebind keys, add chord bindings, change the submit key, edit ~/.claude/keybindings.json.", "harness"),
+    ("fewer-permission-prompts", "Scan transcripts for common read-only Bash/MCP calls and add a prioritized allowlist to project settings.json to reduce permission prompts.", "harness"),
+    ("loop", "Run a prompt or slash command on a recurring interval (e.g. /loop 5m /foo) or self-paced — poll status or repeat a task on a schedule.", "harness"),
+    ("schedule", "Create, update, list, or run scheduled cloud agents (routines) on a cron schedule — automated recurring Claude Code tasks, or a one-time scheduled run.", "harness"),
 ]
 
 
@@ -222,6 +248,7 @@ def _infer_category(description: str) -> str:
         ("content", ["video", "storyboard", "tts", "book video", "youtube", "facebook",
                       "metadata for", "narrative arc", "pacing", "per-scene", "image prompts"]),
         ("creative", ["generate image", "concept art"]),
+        ("library", ["calibre", "owned book", "owned-library", "my shelf", "book library", "titles to acquire"]),
         ("research", ["research", "decision intelligence"]),
         # Development (ship, fix, commit, scaffold)
         ("development", ["github issue", "commit", "open pr", "ship change", "fix.*issue",
@@ -299,37 +326,142 @@ def discover_skills() -> list[dict]:
                         "project": project_name,
                     })
 
-    # Plugin skills (agent/plugins/*/skills/*)
-    if PLUGINS_DIR.exists():
-        for plugin_dir in sorted(PLUGINS_DIR.iterdir()):
-            if not plugin_dir.is_dir():
-                continue
-            skills_dir = plugin_dir / "skills"
+    return skills
+
+
+def _global_enabled_plugins() -> dict:
+    """Read global enabledPlugins from ~/.claude/settings.json (governs user-scope plugins)."""
+    p = Path.home() / ".claude" / "settings.json"
+    try:
+        return json.loads(p.read_text(encoding="utf-8")).get("enabledPlugins", {})
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _project_enables_plugin(project_path: str, plugin_key: str) -> bool:
+    """Whether a project's own settings.json enables this plugin (governs project-scope plugins)."""
+    p = Path(project_path) / ".claude" / "settings.json"
+    try:
+        return bool(json.loads(p.read_text(encoding="utf-8")).get("enabledPlugins", {}).get(plugin_key, False))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+def discover_plugin_skills() -> list[dict]:
+    """Discover skills from INSTALLED + ENABLED marketplace plugins — the authoritative
+    "what Claude actually loads" view, read from installed_plugins.json + enabledPlugins.
+
+    Scope handling, so brain_tools never suggests a plugin not available in a given project:
+      - user-scope plugin, globally enabled            → global skill (project=None, everywhere)
+      - project-scope plugin, enabled in that project  → skill scoped to that project only
+    Uninstalled plugins (e.g. mcp-server-dev) and superseded cache versions are absent from
+    installed_plugins.json, so they drop out for free. This replaces the old dev-location scan
+    (~/Projects/agent/plugins): the cache at installPath is what Claude loads; the dev tree is
+    just marketplace source.
+    """
+    installed_file = Path.home() / ".claude" / "plugins" / "installed_plugins.json"
+    if not installed_file.exists():
+        return []
+    try:
+        installed = json.loads(installed_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    global_enabled = _global_enabled_plugins()
+    out: list[dict] = []
+    seen: set[tuple[str, str | None]] = set()
+
+    for plugin_key, records in installed.get("plugins", {}).items():
+        plugin_name = plugin_key.split("@", 1)[0]
+        for rec in records:
+            scope = rec.get("scope")
+            skills_dir = Path(rec.get("installPath", "")) / "skills"
             if not skills_dir.exists():
                 continue
-            plugin_name = plugin_dir.name
-            for skill_dir in sorted(skills_dir.iterdir()):
-                if not skill_dir.is_dir():
+            # Resolve which project(s) this install serves + whether it's enabled there.
+            if scope == "user":
+                if not global_enabled.get(plugin_key, False):
                     continue
-                if any(skip in skill_dir.name for skip in SKIP_DIRS):
+                projects: list[str | None] = [None]
+            elif scope == "project":
+                pp = rec.get("projectPath")
+                if not pp or not _project_enables_plugin(pp, plugin_key):
+                    continue
+                projects = [Path(pp).name]
+            else:
+                continue
+
+            for skill_dir in sorted(skills_dir.iterdir()):
+                if not skill_dir.is_dir() or any(skip in skill_dir.name for skip in SKIP_DIRS):
                     continue
                 skill_file = skill_dir / "SKILL.md"
                 if not skill_file.exists():
                     continue
                 parsed = _parse_skill(skill_file)
-                if parsed:
-                    desc = parsed["description"]
-                    body = parsed.get("body_context", "")
-                    category = _infer_category(desc)
-                    skills.append({
+                if not parsed:
+                    continue
+                desc = parsed["description"]
+                body = parsed.get("body_context", "")
+                category = _infer_category(desc)
+                for proj in projects:
+                    key = (parsed["name"], proj)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    out.append({
                         "name": parsed["name"],
                         "description": desc,
                         "body_context": body,
                         "category": category,
-                        "project": f"plugin:{plugin_name}",
+                        "project": proj,
+                        "plugin": plugin_name,
                     })
+    return out
 
-    return skills
+
+# ── MCP Server Scoping ─────────────────────────────────────────────────────
+
+def _mcp_server_scopes() -> dict:
+    """Map each MCP server name → its scope: None (global/user) or a project name.
+
+    A project-scoped server's tools must only be suggested in that project — e.g. `readwise`
+    lives in digital-identity/.mcp.json, so its tools should NOT surface in chimera/Bookie.
+      - Global: user-level servers in ~/.claude.json top-level mcpServers (todoist, haingt-brain),
+        plus claude.ai account connectors (claude_ai_*), which aren't in any file config.
+      - Project: servers declared in ~/Projects/<p>/.mcp.json or ~/.claude.json projects[<p>].mcpServers.
+    User-level scope wins over a project declaration (setdefault preserves the global mark).
+    """
+    scopes: dict = {}
+    home = Path.home()
+    cj = {}
+    try:
+        cj = json.loads((home / ".claude.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cj = {}
+    # User-level (global) servers
+    for srv in cj.get("mcpServers", {}):
+        scopes[srv] = None
+    # Project-scoped servers declared inline in ~/.claude.json
+    for proj_path, cfg in cj.get("projects", {}).items():
+        proj = Path(proj_path).name
+        for srv in (cfg.get("mcpServers", {}) or {}):
+            scopes.setdefault(srv, proj)
+    # Project-scoped servers from each ~/Projects/<p>/.mcp.json
+    projects_dir = home / "Projects"
+    if projects_dir.exists():
+        for proj_dir in projects_dir.iterdir():
+            if not proj_dir.is_dir():
+                continue
+            mcp_file = proj_dir / ".mcp.json"
+            if not mcp_file.exists():
+                continue
+            try:
+                servers = json.loads(mcp_file.read_text(encoding="utf-8")).get("mcpServers", {})
+            except (OSError, json.JSONDecodeError):
+                continue
+            for srv in (servers or {}):
+                scopes.setdefault(srv, proj_dir.name)
+    return scopes
 
 
 # ── Drift Validation ──────────────────────────────────────────────────────
@@ -363,28 +495,35 @@ def main():
     conn = connect()
     init_schema(conn)
 
-    # Clear existing tool entries
-    existing = conn.execute("SELECT id FROM memories WHERE type = 'tool'").fetchall()
-    if existing:
-        print(f"Clearing {len(existing)} existing tool entries...")
-        for row in existing:
-            brain_forget(conn, row["id"])
+    # Atomic-ish rebuild: snapshot the OLD tool entries but DON'T delete them yet. The full new
+    # set is built first; every brain_save makes a fresh random-uuid row, so new ids can never
+    # collide with this snapshot. The snapshot is pruned only at the very end. During the rebuild
+    # a reader sees old+new — full coverage, at worst a transient duplicate — never a half-empty
+    # toolbox. Also interruption-safe: if the run dies mid-build, the old set stays intact.
+    old_tool_ids = [row["id"] for row in
+                    conn.execute("SELECT id FROM memories WHERE type = 'tool'").fetchall()]
 
-    # Index MCP tools
+    # Index MCP tools — scoped by their server's config (global vs project), so a
+    # project-scoped server's tools (e.g. readwise → digital-identity) are never
+    # suggested in projects where that server isn't configured.
+    server_scopes = _mcp_server_scopes()
     print(f"\nIndexing {len(MCP_TOOLS)} MCP tools...")
     for mcp_server, tool_name, description, category in MCP_TOOLS:
+        proj = server_scopes.get(mcp_server)  # None → global
         content = f"{tool_name}: {description}"
         brain_save(
             conn, content, "tool",
             tags=[mcp_server, tool_name, category],
+            project=proj,
             metadata={
                 "protocol": "mcp",
                 "server": mcp_server,
                 "name": tool_name,
                 "category": category,
+                "scope": proj or "global",
             },
         )
-        print(f"  + {mcp_server}/{tool_name}")
+        print(f"  + {mcp_server}/{tool_name}" + (f" [{proj}]" if proj else ""))
 
     # Auto-discover and index skills
     skills = discover_skills()
@@ -416,6 +555,46 @@ def main():
         )
         print(f"  + /{name} {scope} ({category})")
 
+    # Index native (binary-bundled) skills — curated, not filesystem-discoverable
+    print(f"\nIndexing {len(NATIVE_SKILLS)} native skills...")
+    for name, description, category in NATIVE_SKILLS:
+        brain_save(
+            conn, f"/{name}: {description}", "tool",
+            tags=["skill", "native", name, category],
+            metadata={
+                "protocol": "native-skill",
+                "name": name,
+                "category": category,
+            },
+        )
+        print(f"  + /{name} [native] ({category})")
+
+    # Index installed + enabled plugin skills (authoritative from installed_plugins.json).
+    # protocol="plugin-skill" keeps them out of the filesystem drift check, which only
+    # validates protocol="skill" (the standard user/project dirs).
+    plugin_skills = discover_plugin_skills()
+    print(f"\nIndexing {len(plugin_skills)} plugin skills...")
+    for skill in plugin_skills:
+        name = skill["name"]
+        project = skill["project"]
+        category = skill["category"]
+        content = f"/{name}: {skill['description']}"
+        if skill.get("body_context"):
+            content += f" — {skill['body_context']}"
+        brain_save(
+            conn, content, "tool",
+            tags=["skill", "plugin", skill.get("plugin", ""), name, category],
+            project=project,
+            metadata={
+                "protocol": "plugin-skill",
+                "name": name,
+                "category": category,
+                "plugin": skill.get("plugin", ""),
+            },
+        )
+        scope = f"[{project}]" if project else "[global]"
+        print(f"  + /{name} {scope} (plugin:{skill.get('plugin', '')}, {category})")
+
     # Index CLI tools
     print(f"\nIndexing {len(CLI_TOOLS)} CLI tools...")
     for command, description, category in CLI_TOOLS:
@@ -432,10 +611,20 @@ def main():
         )
         print(f"  + {command}")
 
-    total = len(MCP_TOOLS) + len(skills) + len(CLI_TOOLS)
+    # Prune: the full new set is built, so delete the snapshotted old entries now. Up to this
+    # point readers saw old+new (full coverage); after it, only the fresh set remains.
+    # brain_forget also clears each entry's vector + FTS rows.
+    if old_tool_ids:
+        print(f"\nPruning {len(old_tool_ids)} superseded tool entries...")
+        for oid in old_tool_ids:
+            brain_forget(conn, oid)
+
+    total = len(MCP_TOOLS) + len(skills) + len(NATIVE_SKILLS) + len(plugin_skills) + len(CLI_TOOLS)
     print(f"\nDone! Indexed {total} capabilities into Semantic Toolbox.")
     print(f"  MCP tools: {len(MCP_TOOLS)}")
     print(f"  Skills: {len(skills)} ({len(global_skills)} global + {len(project_skills)} project)")
+    print(f"  Native skills: {len(NATIVE_SKILLS)}")
+    print(f"  Plugin skills: {len(plugin_skills)} ({sum(1 for s in plugin_skills if s['project'] is None)} global + {sum(1 for s in plugin_skills if s['project'])} project)")
     print(f"  CLI tools: {len(CLI_TOOLS)}")
 
     # Project breakdown
@@ -458,6 +647,11 @@ def main():
         ("create godot scene", "chimera"),
         ("check financial health", "digital-identity"),
         ("find docs for fastapi", None),
+        ("review a pull request", None),
+        ("schedule a recurring cloud agent", None),
+        ("what books do I own about pixel art", None),
+        ("create a new skill from scratch and run evals", None),
+        ("debug a gdscript null-reference error in godot", "chimera"),
     ]
     for query, project in tests:
         results = brain_tools(conn, query, k=1, project=project)
@@ -468,6 +662,26 @@ def main():
             print(f'  "{query}" (project={project}) → {name} [{proj}]')
         else:
             print(f'  "{query}" (project={project}) → NO MATCH')
+
+    # Cross-project scope checks — a scoped capability must surface ONLY where available.
+    print("\n=== Cross-project scope (no leaks) ===")
+    scope_cases = [
+        # (query, project, substring-expected-in-top3, present_expected)
+        ("debug a gdscript error and inspect the godot scene tree", "chimera", "godot", True),
+        ("debug a gdscript error and inspect the godot scene tree", "IronCradle", "godot", True),
+        ("debug a gdscript error and inspect the godot scene tree", "digital-identity", "godot", False),
+        ("save this article to my reading list and tag it", "digital-identity", "reader", True),
+        ("save this article to my reading list and tag it", "chimera", "reader", False),
+        ("save this article to my reading list and tag it", "Bookie", "reader", False),
+    ]
+    scope_ok = True
+    for query, proj, needle, expect in scope_cases:
+        names = [r.get("name", "?") for r in brain_tools(conn, query, k=3, project=proj)]
+        present = any(needle in n for n in names)
+        ok = (present == expect)
+        scope_ok = scope_ok and ok
+        print(f'  {"OK  " if ok else "LEAK"} [{proj}] needle="{needle}" present={present} (expect {expect}) — top3={names}')
+    print(f'  -> cross-project scope {"CLEAN" if scope_ok else "BROKEN — fix before shipping"}')
 
     # Drift check
     drift = validate_tool_index(conn)

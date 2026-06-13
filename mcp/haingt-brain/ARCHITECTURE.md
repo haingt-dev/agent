@@ -430,15 +430,24 @@ Five strategies, all in `consolidate.py`:
 
 ## 10. Semantic Toolbox
 
-**Script**: `scripts/index_tools.py`
+**Indexer**: `scripts/index_tools.py` · **Auto-sync**: `scripts/toolbox-sync.py` (SessionStart hook)
 
-Indexes all available capabilities into brain as type="tool" memories with rich descriptions and Vietnamese trigger phrases. Claude finds the right tool by meaning via `brain_tools("user intent")`.
+Indexes every capability Claude can invoke into brain as type="tool" memories with rich descriptions + Vietnamese trigger phrases. Claude finds the right tool by meaning via `brain_tools("user intent")` and the UserPromptSubmit hook's Phase-2 tool search.
 
-**Current inventory**: 62 capabilities
-- 49 MCP tools: Google Calendar (9), Gmail (7), Todoist (17), Readwise (8), Context7 (2), haingt-brain (7)
-- 13 Skills: alfred, research, token-optimize, gen-image, fix-issue, ship, story, finance, mentor, inbox, learn, reflect, upwork
+**Current inventory**: ~147 capabilities
+- 82 MCP tools (Google Calendar/Gmail/Drive, Todoist, Readwise, Context7, haingt-brain), scoped per server: global vs a project's `.mcp.json` (e.g. readwise → digital-identity only)
+- standard skills (user `~/.claude/skills` + project `.claude/skills`, protocol="skill")
+- 14 native binary-bundled skills (curated `NATIVE_SKILLS`, protocol="native-skill" — no SKILL.md on disk)
+- installed + enabled plugin skills (authoritative from `installed_plugins.json` + `enabledPlugins`, protocol="plugin-skill"; project-scoped plugins like godot-dev surface only in their projects)
+- 3 CLI tools (`chub`)
 
-**Re-index**: `cd ~/Projects/agent/mcp/haingt-brain && uv run python scripts/index_tools.py`
+**Scoping** (so brain_tools never suggests a tool unavailable in a project): a result surfaces only where available via `(project = ? OR project IS NULL)`. For tools, project=None means GLOBAL-ONLY, not all-projects — fixed in `search.py` (guarded by `memory_type=="tool"`) and `prompt-context.py`. Project-scoped skills/plugins/MCP servers never leak across projects.
+
+**Reindex = atomic build-then-prune**: snapshot old tool-ids → build the full new set (random-uuid rows can't collide with the snapshot) → prune the old snapshot. Readers always see ≥ the full set (never a partial-empty toolbox); interruption-safe.
+
+**Auto-sync**: the SessionStart hook `toolbox-sync.py` (wired in `~/.claude/settings.json`) fingerprints the skill/plugin/MCP-config surface + `index_tools.py`, then reindexes in the background only on change (flock-serialized, non-blocking). NOTE: hooks cannot enumerate live MCP *tool schemas* (CC limit — GH #6574/#26112), so project-scoped MCP servers' tools stay hand-curated in `MCP_TOOLS`.
+
+**Manual reindex**: `cd ~/Projects/agent/mcp/haingt-brain && uv run python scripts/index_tools.py`
 
 ## 11. Data Flows
 
@@ -554,7 +563,8 @@ Context approaching limit → /compact triggered
 | `src/haingt_brain/tools/toolbox.py` | brain_tools (Semantic Toolbox) |
 | `src/haingt_brain/tools/session.py` | brain_session (start/save/status + auto-consolidation) |
 | `src/haingt_brain/tools/graph.py` | brain_graph (BFS knowledge graph traversal) |
-| `scripts/index_tools.py` | One-time indexer: 49 MCP tools + 13 skills → brain |
+| `scripts/index_tools.py` | Toolbox indexer (~147 caps): MCP + standard/native/plugin skills + CLI, project-scoped, atomic build-then-prune |
+| `scripts/toolbox-sync.py` | SessionStart auto-sync: fingerprint surface → flock'd background reindex on change |
 
 ### Hook Scripts (`~/Projects/agent/plugins/haint-core/`)
 | File | Purpose |
@@ -595,8 +605,8 @@ Context approaching limit → /compact triggered
 4. For brain.db writes: same pattern + optional embedding via `from haingt_brain.embeddings import embed_text`
 
 ### Index new tools
-1. Add entry to `MCP_TOOLS` or `SKILLS` list in `scripts/index_tools.py`
-2. Run: `cd ~/Projects/agent/mcp/haingt-brain && uv run python scripts/index_tools.py`
+1. Standard skills (user/project `.claude/skills`) and installed plugins are auto-discovered — just add the SKILL.md / install the plugin. MCP tools, native skills, and CLI tools are hand-curated: add an entry to `MCP_TOOLS`, `NATIVE_SKILLS`, or `CLI_TOOLS` in `scripts/index_tools.py`.
+2. Reindex runs automatically on the next session start (the `toolbox-sync.py` hook detects the change). Or trigger it now: `cd ~/Projects/agent/mcp/haingt-brain && uv run python scripts/index_tools.py`
 3. Verify: `brain_tools("natural language query")`
 
 ## 14. Decision Log

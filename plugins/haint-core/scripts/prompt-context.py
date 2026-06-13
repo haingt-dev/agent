@@ -914,7 +914,7 @@ def search_tools_vector(
     (measured 91% never-followed suggestions, audit 2026-06-12).
     """
     emb_bytes = struct.pack(f"{len(embedding)}f", *embedding)
-    project_filter = "AND (m.project = :project OR m.project IS NULL)" if project else ""
+    project_filter = "AND (m.project = :project OR m.project IS NULL)" if project else "AND m.project IS NULL"
     try:
         rows = conn.execute(
             f"""WITH vec_results AS (
@@ -970,7 +970,7 @@ def _fts5_tool_search(
 
     fts_query = " OR ".join(words[:8])
 
-    project_filter = "AND (m.project = ? OR m.project IS NULL)" if project else ""
+    project_filter = "AND (m.project = ? OR m.project IS NULL)" if project else "AND m.project IS NULL"
     params = [fts_query] + ([project] if project else []) + [limit]
 
     try:

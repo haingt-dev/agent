@@ -64,6 +64,11 @@ def hybrid_search(
     if project:
         filters.append("(m.project = :project OR m.project IS NULL)")
         params["project"] = project
+    elif memory_type == "tool":
+        # Tools have scope: with no project context, only globally-available tools apply
+        # (project-scoped skills/MCP servers aren't loaded outside their project). For
+        # non-tool recall, an absent project still means "all memories".
+        filters.append("m.project IS NULL")
     if time_range:
         filters.append("m.created_at >= datetime('now', :time_range)")
         params["time_range"] = time_range
@@ -201,6 +206,11 @@ def vector_search(
     if project:
         filters.append("(m.project = :project OR m.project IS NULL)")
         params["project"] = project
+    elif memory_type == "tool":
+        # Tools have scope: with no project context, only globally-available tools apply
+        # (project-scoped skills/MCP servers aren't loaded outside their project). For
+        # non-tool recall, an absent project still means "all memories".
+        filters.append("m.project IS NULL")
     if time_range:
         filters.append("m.created_at >= datetime('now', :time_range)")
         params["time_range"] = time_range

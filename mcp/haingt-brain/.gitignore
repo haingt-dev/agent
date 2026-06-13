@@ -2,3 +2,7 @@
 __pycache__/
 *.pyc
 .venv/
+
+# Semantic Toolbox auto-sync runtime state (machine-local, not source)
+.toolbox-fingerprint
+.toolbox-sync.lock

@@ -94,10 +94,9 @@ def _discover_skill_names() -> set[tuple[str, str | None]]:
         for project_dir in _PROJECTS_DIR.iterdir():
             if project_dir.is_dir():
                 _scan_dir(project_dir / ".claude" / "skills", project_dir.name)
-    if _PLUGINS_DIR.exists():
-        for plugin_dir in _PLUGINS_DIR.iterdir():
-            if plugin_dir.is_dir():
-                _scan_dir(plugin_dir / "skills", f"plugin:{plugin_dir.name}")
+    # Plugin skills (protocol="plugin-skill", authoritative from installed_plugins.json) and
+    # native skills (protocol="native-skill", curated) are intentionally NOT scanned here:
+    # the drift check only validates protocol="skill" (the standard user/project dirs).
 
     return names
 
