@@ -434,8 +434,8 @@ Five strategies, all in `consolidate.py`:
 
 Indexes every capability Claude can invoke into brain as type="tool" memories with rich descriptions + Vietnamese trigger phrases. Claude finds the right tool by meaning via `brain_tools("user intent")` and the UserPromptSubmit hook's Phase-2 tool search.
 
-**Current inventory**: ~147 capabilities
-- 82 MCP tools (Google Calendar/Gmail/Drive, Todoist, Readwise, Context7, haingt-brain), scoped per server: global vs a project's `.mcp.json` (e.g. readwise → digital-identity only)
+**Current inventory**: ~164 capabilities
+- 99 MCP tools (Google Calendar/Gmail/Drive, Todoist, Readwise, Context7, haingt-brain), scoped per server: global vs a project's `.mcp.json` (e.g. readwise → digital-identity only)
 - standard skills (user `~/.claude/skills` + project `.claude/skills`, protocol="skill")
 - 14 native binary-bundled skills (curated `NATIVE_SKILLS`, protocol="native-skill" — no SKILL.md on disk)
 - installed + enabled plugin skills (authoritative from `installed_plugins.json` + `enabledPlugins`, protocol="plugin-skill"; project-scoped plugins like godot-dev surface only in their projects)
@@ -563,7 +563,7 @@ Context approaching limit → /compact triggered
 | `src/haingt_brain/tools/toolbox.py` | brain_tools (Semantic Toolbox) |
 | `src/haingt_brain/tools/session.py` | brain_session (start/save/status + auto-consolidation) |
 | `src/haingt_brain/tools/graph.py` | brain_graph (BFS knowledge graph traversal) |
-| `scripts/index_tools.py` | Toolbox indexer (~147 caps): MCP + standard/native/plugin skills + CLI, project-scoped, atomic build-then-prune |
+| `scripts/index_tools.py` | Toolbox indexer (~164 caps): MCP + standard/native/plugin skills + CLI, project-scoped, atomic build-then-prune |
 | `scripts/toolbox-sync.py` | SessionStart auto-sync: fingerprint surface → flock'd background reindex on change |
 
 ### Hook Scripts (`~/Projects/agent/plugins/haint-core/`)

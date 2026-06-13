@@ -36,14 +36,19 @@ MCP_TOOLS = [
     ("claude_ai_Google_Calendar", "suggest_time", "Suggest available meeting times / find free slots on Google Calendar", "calendar"),
     ("claude_ai_Google_Calendar", "update_event", "Update an existing Google Calendar event", "calendar"),
 
-    # Gmail (claude.ai connector — names verified live 2026-06-12)
+    # Gmail (claude.ai connector — names verified live 2026-06-13)
     ("claude_ai_Gmail", "search_threads", "Search Gmail threads using query syntax", "email"),
     ("claude_ai_Gmail", "get_thread", "Read an entire Gmail thread by thread ID", "email"),
     ("claude_ai_Gmail", "create_draft", "Create a draft email in Gmail with recipients, subject, and body", "email"),
     ("claude_ai_Gmail", "list_drafts", "List draft emails in Gmail", "email"),
     ("claude_ai_Gmail", "list_labels", "List all labels in Gmail", "email"),
     ("claude_ai_Gmail", "create_label", "Create a new Gmail label", "email"),
-    ("claude_ai_Gmail", "label_thread", "Apply a label to a Gmail thread (also: label_message, unlabel_thread, unlabel_message)", "email"),
+    ("claude_ai_Gmail", "update_label", "Rename or change the color of an existing Gmail label", "email"),
+    ("claude_ai_Gmail", "delete_label", "Delete a Gmail label", "email"),
+    ("claude_ai_Gmail", "label_thread", "Apply one or more labels to a Gmail thread", "email"),
+    ("claude_ai_Gmail", "label_message", "Apply one or more labels to a single Gmail message", "email"),
+    ("claude_ai_Gmail", "unlabel_thread", "Remove one or more labels from a Gmail thread", "email"),
+    ("claude_ai_Gmail", "unlabel_message", "Remove one or more labels from a single Gmail message", "email"),
 
     # Google Drive (claude.ai connector)
     ("claude_ai_Google_Drive", "search_files", "Search files in Google Drive by name or content", "files"),
@@ -89,6 +94,18 @@ MCP_TOOLS = [
     ("todoist", "get-project-health", "Get health metrics for a Todoist project (overdue, stale tasks)", "tasks"),
     ("todoist", "reorder-objects", "Reorder Todoist tasks, sections, or projects", "tasks"),
     ("todoist", "project-move", "Relocate Todoist tasks or sections to a DIFFERENT PROJECT/list (move between projects — NOT for changing due dates; use reschedule-tasks for dates).", "tasks"),
+    ("todoist", "update-goals", "Update existing Todoist goals — rename, change description, deadline, or responsible user", "tasks"),
+    ("todoist", "update-reminders", "Update existing Todoist reminders (relative, absolute, or location) — change offset, time, delivery service, or trigger", "tasks"),
+    ("todoist", "update-sections", "Rename existing Todoist sections", "tasks"),
+    ("todoist", "update-comments", "Edit the content of existing Todoist comments", "tasks"),
+    ("todoist", "update-filters", "Update existing Todoist saved filters — query, name, color, or favorite flag", "tasks"),
+    ("todoist", "analyze-project-health", "Trigger a fresh health analysis for a Todoist project (run when health data is stale; read results via get-project-health)", "tasks"),
+    ("todoist", "get-project-activity-stats", "Get daily/weekly task completion counts for a Todoist project over 1-12 weeks — completion trends and patterns", "tasks"),
+    ("todoist", "get-workspace-insights", "Get aggregated health and progress across all projects in a Todoist workspace — cross-project overview", "tasks"),
+    ("todoist", "find-project-collaborators", "Find Todoist users (collaborators, teammates) by name or email to look up their user ID — 'who is X', look up a person", "tasks"),
+    ("todoist", "manage-assignments", "Bulk assign, unassign, or reassign Todoist tasks to collaborators (atomic rollback on failure)", "tasks"),
+    ("todoist", "list-workspaces", "List all Todoist workspaces for the user with plan type, role, and sharing settings", "tasks"),
+    ("todoist", "project-management", "Archive or unarchive a Todoist project", "tasks"),
 
     # Readwise
     ("readwise", "readwise_search_highlights", "Search book and article highlights in Readwise by meaning or keywords", "reading"),
@@ -633,7 +650,7 @@ def main():
         proj = s["project"]
         projects[proj] = projects.get(proj, 0) + 1
     if projects:
-        print(f"\n  Project skills breakdown:")
+        print("\n  Project skills breakdown:")
         for proj, count in sorted(projects.items()):
             print(f"    {proj}: {count}")
 
