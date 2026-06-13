@@ -138,6 +138,35 @@ MCP_TOOLS = [
     ("haingt-brain", "brain_tools", "Semantic Toolbox — find the right tool/skill for a task by meaning", "memory"),
     ("haingt-brain", "brain_session", "Session lifecycle — start, save learnings, check status", "memory"),
     ("haingt-brain", "brain_graph", "Traverse knowledge graph from a memory entity", "memory"),
+
+    # Civitai (project-scoped → home-server; image-gen model/prompt mining for Forge.
+    # Names captured live 2026-06-13. Skipped get-by-ID/hash plumbing (get_model,
+    # get_model_version[_mini|_by_hash|_by_hashes]), user-info (get_current_user),
+    # the get_download_url sub-primitive, lookup/filter helpers (lookup_users,
+    # get_creators, get_tags), and TRAIL/history bookkeeping (mark_as_used, mark_trail,
+    # get_trail, get_trail_stats) — they dilute top-k. The /civitai-model skill wraps the workflow.)
+    ("civitai", "search_models", "Search Civitai for AI image models — find a LoRA, checkpoint, ControlNet, or embedding by name / type / base-model (SDXL, Pony, Illustrious, NoobAI, Flux). Tìm model/LoRA trên Civitai.", "imagegen"),
+    ("civitai", "browse_images", "Browse AI-generated images/videos on Civitai with their prompts + generation params — inspiration and prompt mining, filter by tag / base-model / NSFW level.", "imagegen"),
+    ("civitai", "get_top_loras", "Get the most popular / trending LoRAs for a base model (SDXL, Pony, Illustrious, Flux).", "imagegen"),
+    ("civitai", "get_top_checkpoints", "Get the most popular / trending checkpoint models for a base model — best SDXL, Pony, Flux, Illustrious checkpoints.", "imagegen"),
+    ("civitai", "get_top_images", "Get top Civitai images/videos by reactions — best source of great prompts to copy, filter by tag / base-model / browsing-level.", "imagegen"),
+    ("civitai", "get_image_generation_data", "Extract full generation parameters (prompt, negative, sampler, CFG, LoRA combos) from a model's top images — prompt mining for a specific model.", "imagegen"),
+    ("civitai", "get_model_images", "Get example images for a specific model with full gen params (prompt, steps, CFG, seed, LoRAs) — learn how to use a model well.", "imagegen"),
+    ("civitai", "get_download_info", "Get authenticated download URLs + ready-to-paste curl/PowerShell commands for a Civitai model — download a LoRA / checkpoint. Tải model về Forge.", "imagegen"),
+    ("civitai", "check_permissions", "Check whether model versions are downloadable or early-access gated (membership / purchase) before attempting a download.", "imagegen"),
+    ("civitai", "get_enums", "Get valid Civitai enum values — supported ModelType, BaseModel, ActiveBaseModel strings for filtering searches.", "imagegen"),
+
+    # SillyTavern (project-scoped → home-server; manage ST chat-UI data live, no container
+    # restart — ST hot-reloads on save. Names captured live 2026-06-13. All 8 are
+    # task-discoverable, so the whole server surface is indexed.)
+    ("st", "st_list_characters", "List all SillyTavern character cards (name, avatar, tags) — browse available RP characters.", "sillytavern"),
+    ("st", "st_get_character", "Read a SillyTavern character card's full data — description, personality, scenario, first message.", "sillytavern"),
+    ("st", "st_get_settings", "Read SillyTavern settings at a dotted path (SD image-gen config, persona descriptions, sampler, lorebook list) — path-based to avoid huge tree dumps.", "sillytavern"),
+    ("st", "st_save_settings_path", "Surgically update one SillyTavern setting at a dotted path — ST hot-reloads, no container restart, no save race.", "sillytavern"),
+    ("st", "st_save_settings", "Overwrite the full SillyTavern settings tree — prefer st_save_settings_path for surgical edits.", "sillytavern"),
+    ("st", "st_get_worldinfo", "Read a SillyTavern World Info lorebook by name — entries + metadata.", "sillytavern"),
+    ("st", "st_save_worldinfo", "Overwrite a SillyTavern World Info lorebook (full data dict) — read first to merge rather than blow away entries.", "sillytavern"),
+    ("st", "st_get_recent_chat", "List recent chat sessions for a SillyTavern character (metadata: file, size, last message).", "sillytavern"),
 ]
 
 # ── CLI Tools ──────────────────────────────────────────────────────────────
