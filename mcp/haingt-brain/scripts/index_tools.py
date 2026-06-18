@@ -42,13 +42,8 @@ MCP_TOOLS = [
     ("claude_ai_Gmail", "create_draft", "Create a draft email in Gmail with recipients, subject, and body", "email"),
     ("claude_ai_Gmail", "list_drafts", "List draft emails in Gmail", "email"),
     ("claude_ai_Gmail", "list_labels", "List all labels in Gmail", "email"),
-    ("claude_ai_Gmail", "create_label", "Create a new Gmail label", "email"),
-    ("claude_ai_Gmail", "update_label", "Rename or change the color of an existing Gmail label", "email"),
-    ("claude_ai_Gmail", "delete_label", "Delete a Gmail label", "email"),
     ("claude_ai_Gmail", "label_thread", "Apply one or more labels to a Gmail thread", "email"),
-    ("claude_ai_Gmail", "label_message", "Apply one or more labels to a single Gmail message", "email"),
     ("claude_ai_Gmail", "unlabel_thread", "Remove one or more labels from a Gmail thread", "email"),
-    ("claude_ai_Gmail", "unlabel_message", "Remove one or more labels from a single Gmail message", "email"),
 
     # Google Drive (claude.ai connector)
     ("claude_ai_Google_Drive", "search_files", "Search files in Google Drive by name or content", "files"),
@@ -57,7 +52,6 @@ MCP_TOOLS = [
     ("claude_ai_Google_Drive", "create_file", "Create a new file in Google Drive", "files"),
     ("claude_ai_Google_Drive", "copy_file", "Copy an existing Google Drive file", "files"),
     ("claude_ai_Google_Drive", "get_file_metadata", "Get metadata (owner, dates, sharing) of a Google Drive file", "files"),
-    ("claude_ai_Google_Drive", "get_file_permissions", "Get sharing permissions of a Google Drive file", "files"),
     ("claude_ai_Google_Drive", "download_file_content", "Download the raw content of a Google Drive file", "files"),
 
     # Todoist
@@ -76,35 +70,21 @@ MCP_TOOLS = [
     ("todoist", "find-comments", "List comments on a Todoist task or project", "tasks"),
     ("todoist", "get-overview", "Get overview of Todoist workload and progress", "tasks"),
     ("todoist", "search", "Full-text search across all Todoist tasks and projects", "tasks"),
-    ("todoist", "get-productivity-stats", "Get Todoist productivity statistics (karma, streaks)", "tasks"),
     ("todoist", "uncomplete-tasks", "Reopen completed Todoist tasks", "tasks"),
     ("todoist", "find-completed-tasks", "List completed Todoist tasks by date range or project", "tasks"),
     ("todoist", "delete-object", "Delete a Todoist task, project, section, comment, or label", "tasks"),
     ("todoist", "add-reminders", "Add reminders to Todoist tasks (time or location based)", "tasks"),
     ("todoist", "find-reminders", "List reminders on Todoist tasks", "tasks"),
-    ("todoist", "add-goals", "Create goals in Todoist (weekly/monthly targets)", "tasks"),
-    ("todoist", "find-goals", "List Todoist goals and their progress", "tasks"),
-    ("todoist", "complete-goals", "Mark Todoist goals as completed", "tasks"),
-    ("todoist", "link-goal-tasks", "Link Todoist tasks to a goal for progress tracking", "tasks"),
     ("todoist", "add-labels", "Create Todoist labels", "tasks"),
     ("todoist", "update-labels", "Rename or recolor Todoist labels", "tasks"),
     ("todoist", "add-filters", "Create saved filters in Todoist (query-based views)", "tasks"),
     ("todoist", "find-filters", "List saved Todoist filters", "tasks"),
-    ("todoist", "find-activity", "Get Todoist activity log (recent changes, completions)", "tasks"),
-    ("todoist", "get-project-health", "Get health metrics for a Todoist project (overdue, stale tasks)", "tasks"),
     ("todoist", "reorder-objects", "Reorder Todoist tasks, sections, or projects", "tasks"),
     ("todoist", "project-move", "Relocate Todoist tasks or sections to a DIFFERENT PROJECT/list (move between projects — NOT for changing due dates; use reschedule-tasks for dates).", "tasks"),
-    ("todoist", "update-goals", "Update existing Todoist goals — rename, change description, deadline, or responsible user", "tasks"),
     ("todoist", "update-reminders", "Update existing Todoist reminders (relative, absolute, or location) — change offset, time, delivery service, or trigger", "tasks"),
     ("todoist", "update-sections", "Rename existing Todoist sections", "tasks"),
     ("todoist", "update-comments", "Edit the content of existing Todoist comments", "tasks"),
     ("todoist", "update-filters", "Update existing Todoist saved filters — query, name, color, or favorite flag", "tasks"),
-    ("todoist", "analyze-project-health", "Trigger a fresh health analysis for a Todoist project (run when health data is stale; read results via get-project-health)", "tasks"),
-    ("todoist", "get-project-activity-stats", "Get daily/weekly task completion counts for a Todoist project over 1-12 weeks — completion trends and patterns", "tasks"),
-    ("todoist", "get-workspace-insights", "Get aggregated health and progress across all projects in a Todoist workspace — cross-project overview", "tasks"),
-    ("todoist", "find-project-collaborators", "Find Todoist users (collaborators, teammates) by name or email to look up their user ID — 'who is X', look up a person", "tasks"),
-    ("todoist", "manage-assignments", "Bulk assign, unassign, or reassign Todoist tasks to collaborators (atomic rollback on failure)", "tasks"),
-    ("todoist", "list-workspaces", "List all Todoist workspaces for the user with plan type, role, and sharing settings", "tasks"),
     ("todoist", "project-management", "Archive or unarchive a Todoist project", "tasks"),
 
     # Readwise
@@ -169,19 +149,25 @@ MCP_TOOLS = [
     ("st", "st_get_recent_chat", "List recent chat sessions for a SillyTavern character (metadata: file, size, last message).", "sillytavern"),
 
     # Aseprite (project-scoped → chimera; the pixel-art ASSEMBLY + QA layer, driving Steam
-    # Aseprite 1.3.17.2 fully headless via the diivi/aseprite-mcp 103-tool build. Captured
-    # live 2026-06-13 from a chimera session. CURATED to the task-discoverable jobs in
-    # art-pipeline.md §4.5 — the ~67 omitted tools are granular siblings (no-suffix draw
-    # variants, per-cel/-frame/-slice/-tile getters+setters, region/onion-skin/merge/flip/
-    # rotate primitives) folded into the descriptions below; reach for them via §4.5 once
-    # in-flow. Standing law: FLAT layers only (group-blind), RGB masters only for palette/
-    # read ops, trust result-text not transport-ok. NOT a generator — NINE/enemies stay on
-    # the SD pipeline; this is assembly/QA. Full verified table + guardrails = §4.5.)
+    # Aseprite 1.3.17.2 fully headless via the diivi/aseprite-mcp 104-tool build. Captured
+    # live 2026-06-13, REFRESHED 2026-06-18 after our group-support PRs merged upstream
+    # (#18 group-aware find_layer + #19 add_group / add_layer group param). CURATED to the
+    # task-discoverable jobs in art-pipeline.md §4.5 — the ~67 omitted tools are granular
+    # siblings (no-suffix draw variants, per-cel/-frame/-slice/-tile getters+setters, region/
+    # onion-skin/merge/flip/rotate primitives) folded into the descriptions below; reach for
+    # them via §4.5 once in-flow. Standing law: layer GROUPS now supported on the CREATE/TARGET
+    # path — draw/edit/create tools resolve a `group/child` layer path, add_group + add_layer's
+    # group param create into groups (#18/#19); BUT enumerating readers (get_sprite_info,
+    # audit_animation) still list only top-level layers — use export_layers / run_lua_script to
+    # see inside groups. RGB masters only for palette/read ops, trust result-text not transport-ok.
+    # NOT a generator — NINE/enemies stay on the SD pipeline; this is assembly/QA. Full verified
+    # table + guardrails = §4.5.)
     ("aseprite", "create_canvas", "Create a new Aseprite sprite/canvas (always RGB) — scaffold a sprite at a given size. Silently overwrites an existing file; copy_sprite first. Tạo file sprite mới.", "pixelart"),
     ("aseprite", "copy_sprite", "Duplicate an Aseprite sprite file — make a backup before editing a production master (create_canvas/crop_canvas overwrite silently).", "pixelart"),
     ("aseprite", "resize_canvas", "Resize an Aseprite canvas — it SCALES the content (e.g. 2× nearest-neighbor marketing upscale), it is NOT a pad/extend (enlarging smears pixel art).", "pixelart"),
     ("aseprite", "set_color_mode", "Convert an Aseprite sprite's color mode (rgb / grayscale / indexed) — go indexed only as the LAST export step (destructive nearest-snap on off-palette pixels).", "pixelart"),
-    ("aseprite", "add_layer", "Add a new flat layer to an Aseprite sprite (no layer groups — group-nested layers are invisible to the checked tools).", "pixelart"),
+    ("aseprite", "add_layer", "Add a layer to an Aseprite sprite — optional group param nests it inside a named group (name or 'group/subgroup' path; #19). Create the group first with add_group. Thêm layer (vào group nếu cần).", "pixelart"),
+    ("aseprite", "add_group", "Create a layer GROUP in an Aseprite sprite — optional parent_group nests it (name or 'group/subgroup' path; #19). Organize layers into groups; pair with add_layer's group param to put layers directly inside. Tạo nhóm layer.", "pixelart"),
     ("aseprite", "import_image_as_layer", "Import a PNG/image into an Aseprite sprite as a new layer at an exact offset — Stage-2 PNG → master import.", "pixelart"),
     ("aseprite", "copy_layers_between_sprites", "Copy named layers from one Aseprite sprite into another, pixel-exact — the PNG→master import (a PNG's single layer is named 'Layer'; no size guard, check dims first). Import ảnh SD vào master sprite.", "pixelart"),
     ("aseprite", "add_frames", "Add animation frames to an Aseprite sprite — frames are DUPLICATED from the source (clear_cel after for blanks). Thêm frame animation.", "pixelart"),
@@ -202,17 +188,17 @@ MCP_TOOLS = [
     ("aseprite", "quantize_to_palette", "Snap every pixel of an Aseprite sprite to the nearest palette color (RGB distance) — machine palette enforcement (§9.1), run after set_palette/apply_palette_preset. RGB-only; verify unique_colors == palette size. Ép palette / quantize.", "pixelart"),
     ("aseprite", "get_color_stats", "Get color statistics of an Aseprite sprite — accurate unique-color count, sees inside groups (the palette-audit instrument). RGB-only. Đếm màu / audit palette.", "pixelart"),
     ("aseprite", "compare_frames", "Diff two Aseprite frames pixel-by-pixel — returns changed-pixel count, percent, and the bounding box of the change. Animation QA oracle (confirm a frame actually changed / not too much).", "pixelart"),
-    ("aseprite", "audit_animation", "Audit an Aseprite animation — per-layer/per-frame cel report for QA (flat layers only; populated JSON since PR#12).", "pixelart"),
+    ("aseprite", "audit_animation", "Audit an Aseprite animation — per-layer/per-frame cel report for QA (audits TOP-LEVEL layers only — counts a group as one layer, skips cels nested inside it; populated JSON since PR#12).", "pixelart"),
     ("aseprite", "animation_sanitize", "Enforce frame-lock in Aseprite — detect cels outside the allowed layer/frame ranges and zero them (keep the default set_opacity_zero; delete_cels is destructive).", "pixelart"),
     ("aseprite", "validate_scene", "Validate an Aseprite sprite's layer/frame/tag structure for QA (flat layers only).", "pixelart"),
-    ("aseprite", "get_sprite_info", "Get Aseprite sprite metadata — size, layers, frames, tags (QA readback; flat layers only).", "pixelart"),
+    ("aseprite", "get_sprite_info", "Get Aseprite sprite metadata — size, layers, frames, tags (QA readback; lists TOP-LEVEL layers and flags is_group, but does NOT recurse into group children — use export_layers / run_lua_script to enumerate nested layers).", "pixelart"),
     ("aseprite", "get_pixel_color", "Read the color of a single pixel in an Aseprite sprite — readback-verify after unchecked draws (RGB-only; pass an explicit layer_name). Bulk read = get_pixels_rect.", "pixelart"),
     ("aseprite", "create_slice", "Create a named slice (a rectangular game-engine region / 9-patch / atlas frame) in an Aseprite sprite — never use '|' in the name. Siblings: set_slice_center (9-patch), set_slice_pivot, list_slices, delete_slice.", "pixelart"),
     ("aseprite", "create_tilemap_layer", "Create a tilemap layer with its own tileset in Aseprite — level/tileset authoring (tile index 0 = empty). Siblings: draw_on_tile, set_tiles, get_tile_at, get_tilemap_info.", "pixelart"),
     ("aseprite", "export_sprite", "Export an Aseprite sprite to PNG (multi-frame fans out to name1..N.png, digit-free basenames). Xuất PNG.", "pixelart"),
     ("aseprite", "export_layers", "Export each Aseprite layer as its own PNG — native --split-layers, the one export that PIERCES groups (incl. group children).", "pixelart"),
     ("aseprite", "export_spritesheet", "Export an Aseprite sprite as a packed spritesheet + JSON atlas (validates the tag). Xuất spritesheet.", "pixelart"),
-    ("aseprite", "run_lua_script", "Run arbitrary Aseprite Lua in batch mode — the escape hatch + only group-aware inspect/edit path (reproduces celdump/palette_audit). Does NOT auto-save (spr:saveAs required) and returns BLANK on error (use print() markers to verify).", "pixelart"),
+    ("aseprite", "run_lua_script", "Run arbitrary Aseprite Lua in batch mode — the escape hatch + the way to ENUMERATE layers nested inside groups (checked tools target group/child paths since #18, but the JSON readers don't recurse to list children; reproduces celdump/palette_audit). Does NOT auto-save (spr:saveAs required) and returns BLANK on error (use print() markers to verify).", "pixelart"),
 ]
 
 # ── Plugin-bundled MCP Tools ─────────────────────────────────────────────────
@@ -245,7 +231,13 @@ PLUGIN_MCP_TOOLS = [
 CLI_TOOLS = [
     ("chub search", "Search curated LLM-optimized docs and skills for libraries/frameworks. Usage: chub search [query] --json", "docs"),
     ("chub get", "Fetch curated documentation by ID with language variant. Usage: chub get <id> --lang py|js", "docs"),
-    ("chub annotate", "Attach persistent notes to a doc or skill for future sessions. Usage: chub annotate [id] [note]", "docs"),
+    ("gh pr create", "Open a GitHub PR from the terminal — drives the stacked-PR workflow on the aseprite-mcp fork. Usage: gh pr create --base main --head <branch> --title .. --body ..", "development"),
+    ("gh pr view", "View a GitHub PR's status, CI checks, and review comments from the CLI — confirm a PR merged or see what's failing. Usage: gh pr view <n> --comments ; gh pr checks <n>", "development"),
+    ("gh run watch", "Watch or inspect GitHub Actions CI runs from the terminal — follow a build, see why it failed. Usage: gh run watch ; gh run view <id> --log-failed", "development"),
+    ("gh issue create", "File or list GitHub issues from the CLI — upstream bug reports and feature filings. Usage: gh issue create --repo owner/repo --title .. ; gh issue list", "development"),
+    ("yt-dlp", "Download video/audio + metadata from YouTube and 1000+ sites — pull reference/source footage for Bookie video. Usage: yt-dlp -f best <url> ; -x --audio-format mp3 for audio. Tải video nguồn.", "content"),
+    ("rg", "ripgrep — fast recursive code/content search across a tree (respects .gitignore). Daily driver for Godot/GDScript, the Calibre library, and docs. Usage: rg -n 'pattern' path ; -t gd ; -g '!dir'. Tìm trong code/text.", "development"),
+    ("jq", "Slice / filter / reshape JSON from the CLI — MCP payloads, Aseprite atlas exports, Civitai gen-params, brain.db json_extract output. Usage: jq '.key[] | select(.x)' file.json. Xử lý JSON.", "development"),
 ]
 
 
