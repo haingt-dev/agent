@@ -187,6 +187,148 @@ def dedup_pool(
     return kept
 
 
+def _age_label(newer_created: str, older_created: str) -> str:
+    """Human "Nd ago" between two created_at strings (newer minus older)."""
+    from datetime import datetime
+
+    try:
+        dn = datetime.fromisoformat(newer_created)
+        do = datetime.fromisoformat(older_created)
+    except (ValueError, TypeError):
+        return "older"
+    days = (dn - do).days
+    if days >= 1:
+        return f"{days}d ago"
+    hours = int((dn - do).total_seconds() // 3600)
+    if hours >= 1:
+        return f"{hours}h ago"
+    return "earlier"
+
+
+def cluster_conflicts(
+    conn: sqlite3.Connection,
+    results: list[dict],
+    sim_lo: float = 0.80,
+    sim_hi: float = 0.985,
+) -> dict[str, dict]:
+    """Find same-subject DIVERGENT pairs among the final results and tag currency.
+
+    A conflict pair = same `type`, same-or-null project, cosine in [sim_lo, sim_hi]
+    (high enough = same subject; below the ~0.99 near-identical-dup band that
+    dedup_pool already collapses), OR an explicit `contradicts`/`supersedes` edge
+    between two members. Clusters are grouped; the newest member by created_at is
+    flagged "current", the rest "superseded_candidate (Nd ago)". This converts the
+    silent "two divergent rows, no signal" case into an explicit currency cue so
+    the reader stops having to ask which is current.
+
+    Returns {memory_id: {"role": "current"|"superseded_candidate", "age": str,
+                         "vs": peer_id, "via": "similarity"|"edge"}}.
+    Annotation only — never reorders or hides. Soft-fails to {} on any error.
+    """
+    if len(results) < 2:
+        return {}
+    by_id = {r.get("id"): r for r in results if r.get("id")}
+    ids = list(by_id)
+    if len(ids) < 2:
+        return {}
+
+    # Fetch embeddings for the (small, ≤k) result set — mirrors dedup_pool.
+    embs: dict[str, bytes] = {}
+    for cid in ids:
+        try:
+            row = conn.execute(
+                "SELECT embedding FROM memory_vectors WHERE memory_id = ?", (cid,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return {}
+        if row:
+            embs[cid] = row[0]
+
+    # Anti-series guard: formulaic phase-logs ("aseprite Tier 1/2a/2b LANDED") are
+    # distinct-true siblings, not supersession — skip them for GEOMETRIC pairs. An
+    # explicit contradicts/supersedes edge (below) is a deliberate judgment and is
+    # always surfaced regardless.
+    def _series(a_content, b_content) -> bool:
+        try:
+            from .contradiction import is_series_pair
+            return is_series_pair(a_content or "", b_content or "")
+        except Exception:
+            return False
+
+    # Geometric conflict pairs
+    pairs: list[tuple[str, str, str]] = []  # (a, b, via)
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            a, b = ids[i], ids[j]
+            ra, rb = by_id[a], by_id[b]
+            if ra.get("type") != rb.get("type"):
+                continue
+            pa, pb = ra.get("project"), rb.get("project")
+            if pa is not None and pb is not None and pa != pb:
+                continue
+            ea, eb = embs.get(a), embs.get(b)
+            if ea is None or eb is None:
+                continue
+            sim = _cosine_bytes(ea, eb)
+            if sim_lo <= sim <= sim_hi and not _series(ra.get("content"), rb.get("content")):
+                pairs.append((a, b, "similarity"))
+
+    # Explicit edges among the result set (first consumer of `contradicts`)
+    try:
+        placeholders = ",".join("?" * len(ids))
+        edge_rows = conn.execute(
+            f"""SELECT source_id, target_id FROM relations
+                WHERE relation_type IN ('contradicts', 'supersedes')
+                  AND source_id IN ({placeholders}) AND target_id IN ({placeholders})""",
+            (*ids, *ids),
+        ).fetchall()
+        for er in edge_rows:
+            pairs.append((er["source_id"], er["target_id"], "edge"))
+    except sqlite3.OperationalError:
+        pass
+
+    if not pairs:
+        return {}
+
+    # Union-find clustering
+    parent = {cid: cid for cid in ids}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    via_of: dict[str, str] = {}
+    for a, b, via in pairs:
+        parent[find(a)] = find(b)
+        via_of[a] = via_of.get(a, via)
+        via_of[b] = via_of.get(b, via)
+
+    clusters: dict[str, list[str]] = {}
+    for cid in ids:
+        if cid in via_of:
+            clusters.setdefault(find(cid), []).append(cid)
+
+    flags: dict[str, dict] = {}
+    for members in clusters.values():
+        if len(members) < 2:
+            continue
+        newest = max(members, key=lambda m: by_id[m].get("created_at") or "")
+        newest_created = by_id[newest].get("created_at") or ""
+        for m in members:
+            if m == newest:
+                flags[m] = {"role": "current", "via": via_of.get(m, "similarity")}
+            else:
+                flags[m] = {
+                    "role": "superseded_candidate",
+                    "age": _age_label(newest_created, by_id[m].get("created_at") or ""),
+                    "vs": newest,
+                    "via": via_of.get(m, "similarity"),
+                }
+    return flags
+
+
 def vector_search(
     conn: sqlite3.Connection,
     query_embedding: list[float],

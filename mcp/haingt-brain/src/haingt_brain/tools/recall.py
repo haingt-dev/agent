@@ -25,7 +25,7 @@ from ..judge import (
     judge_relevance,
     update_budget,
 )
-from ..search import dedup_pool, hybrid_search
+from ..search import cluster_conflicts, dedup_pool, hybrid_search
 
 
 def _oversample_k(k: int) -> int:
@@ -139,6 +139,16 @@ def brain_recall(
     if telemetry.get("cost_usd", 0) > 0:
         update_budget(conn, telemetry["cost_usd"])
 
+    # Stage 5.5: Conflict-surface — tag same-subject divergent siblings in the
+    # final set with currency ("_current" vs "_superseded_candidate (Nd ago)"),
+    # so the reader is told WHICH is current instead of silently receiving two
+    # contradictory rows and having to ask. Annotation only — nothing is hidden
+    # or reordered. Soft-fail to no flags.
+    try:
+        conflict_flags = cluster_conflicts(conn, results)
+    except Exception:
+        conflict_flags = {}
+
     # Format for output
     formatted = []
     for r in results:
@@ -160,6 +170,13 @@ def brain_recall(
         # surface the tier so consumers can trust them above the flat RRF band.
         if r.get("fts_hit") is not None:
             entry["dual_hit"] = bool(r.get("fts_hit")) and bool(r.get("vec_hit"))
+        flag = conflict_flags.get(r["id"])
+        if flag:
+            if flag["role"] == "current":
+                entry["_current"] = True
+            else:
+                entry["_superseded_candidate"] = flag.get("age", "older")
+                entry["_conflict_with"] = flag.get("vs")
         formatted.append(entry)
 
     # Attach judge_status as a top-level field on the first entry (signal carrier)

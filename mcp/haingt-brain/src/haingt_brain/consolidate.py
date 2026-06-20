@@ -135,6 +135,8 @@ def _do_consolidate_all(
         "importance_decayed": 0,
         "weak_pruned": 0,
         "clusters_synthesized": 0,
+        "supersede_edges": 0,
+        "contradict_edges": 0,
         "strategies_run": sorted(run),
         "details": [],
     }
@@ -167,6 +169,12 @@ def _do_consolidate_all(
         r5 = cluster_and_synthesize(conn, min_cluster=3, sim_threshold=0.65, dry_run=dry_run)
         report["clusters_synthesized"] = r5["synthesized"]
         report["details"].extend(r5["details"])
+
+    if "supersede" in run:
+        r6 = supersede_pass(conn, dry_run=dry_run)
+        report["supersede_edges"] = r6["supersede_edges"]
+        report["contradict_edges"] = r6["contradict_edges"]
+        report["details"].extend(r6["details"])
 
     # Record consolidation timestamp
     _record_consolidation(conn)
@@ -752,6 +760,122 @@ def _record_consolidation(conn: sqlite3.Connection) -> None:
         """INSERT OR REPLACE INTO brain_meta (key, value) VALUES ('sessions_since_consolidation', '0')"""
     )
     conn.commit()
+
+
+def supersede_pass(conn: sqlite3.Connection, dry_run: bool = False) -> dict:
+    """Batch belief-revision: scan existing same-subject divergent pairs, classify,
+    and create relation edges. The back-catalog cleaner for contradictions.
+
+    Hard rules (vs merge_duplicates):
+    - NEVER deletes. Only creates edges (+ demotes a supersede target). The 0.95
+      geometric merge that hard-deletes the loser is a SEPARATE, different pass.
+    - Band 0.80-0.97 (same subject, divergent) — deliberately BELOW the 0.95 dup
+      merge band so it never overlaps the delete path.
+    - classify_pair carries the anti-series guard, so phase-logs / dated series
+      short-circuit to 'unrelated' and are never linked.
+    - Routes to `contradicts` (surface both) by default; only `supersedes` (hide
+      the older) when classify_pair found explicit reversal language.
+
+    NOT in SAFE_STRATEGIES — runs only on explicit strategies={'supersede'},
+    dry-run-first. Per-run cap bounds LLM cost.
+    """
+    from .contradiction import classify_pair
+
+    result = {"supersede_edges": 0, "contradict_edges": 0, "details": []}
+    try:
+        min_conf = float(os.environ.get("BRAIN_SUPERSEDE_MIN_CONF", "0.85"))
+    except ValueError:
+        min_conf = 0.85
+    try:
+        cap = int(os.environ.get("BRAIN_SUPERSEDE_MAX_PER_RUN", "40"))
+    except ValueError:
+        cap = 40
+    lo, hi = 0.80, 0.97
+
+    rows = conn.execute(
+        "SELECT id, content, type, project, created_at FROM memories "
+        "WHERE type NOT IN ('tool', 'preference', 'session') ORDER BY created_at DESC"
+    ).fetchall()
+    by_id = {r["id"]: r for r in rows}
+
+    linked: set[tuple[str, str]] = set()
+    for er in conn.execute(
+        "SELECT source_id, target_id FROM relations WHERE relation_type IN ('supersedes','contradicts')"
+    ):
+        linked.add((er["source_id"], er["target_id"]))
+        linked.add((er["target_id"], er["source_id"]))
+
+    seen: set[tuple[str, str]] = set()
+    acted = 0
+
+    for r in rows:
+        if acted >= cap:
+            break
+        vec = conn.execute(
+            "SELECT embedding FROM memory_vectors WHERE memory_id = ?", (r["id"],)
+        ).fetchone()
+        if not vec:
+            continue
+        try:
+            neighbors = conn.execute(
+                "SELECT memory_id FROM memory_vectors WHERE embedding MATCH ? AND k = 6",
+                (vec["embedding"],),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            continue
+        for nb in neighbors:
+            if acted >= cap:
+                break
+            oid = nb["memory_id"]
+            o = by_id.get(oid)
+            if not o or oid == r["id"] or o["type"] != r["type"]:
+                continue
+            pa, pb = r["project"], o["project"]
+            if pa is not None and pb is not None and pa != pb:
+                continue
+            pair = tuple(sorted((r["id"], oid)))
+            if pair in seen or (r["id"], oid) in linked:
+                continue
+            seen.add(pair)
+            ovec = conn.execute(
+                "SELECT embedding FROM memory_vectors WHERE memory_id = ?", (oid,)
+            ).fetchone()
+            if not ovec:
+                continue
+            sim = _cosine_from_bytes(vec["embedding"], ovec["embedding"])
+            if not (lo <= sim <= hi):
+                continue
+            newer, older = (r, o) if (r["created_at"] or "") >= (o["created_at"] or "") else (o, r)
+            verdict = classify_pair(newer["content"], older["content"])
+            v, conf = verdict["verdict"], verdict["confidence"]
+            if v == "unrelated" or conf < min_conf:
+                continue
+            if v == "supersedes":
+                result["supersede_edges"] += 1
+                result["details"].append(
+                    f"supersedes: {newer['id']} -> {older['id']} (sim={sim:.3f}, conf={conf:.2f})")
+                if not dry_run:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO relations (source_id, target_id, relation_type, weight) "
+                        "VALUES (?, ?, 'supersedes', 1.0)", (newer["id"], older["id"]))
+                    conn.execute(
+                        "UPDATE memories SET importance = COALESCE(importance,0.5)*0.5 WHERE id = ?",
+                        (older["id"],))
+            else:  # contradicts — surface both, hide nothing
+                result["contradict_edges"] += 1
+                result["details"].append(
+                    f"contradicts: {newer['id']} <-> {older['id']} (sim={sim:.3f}, conf={conf:.2f})")
+                if not dry_run:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO relations (source_id, target_id, relation_type, weight) "
+                        "VALUES (?, ?, 'contradicts', 1.0)", (newer["id"], older["id"]))
+            linked.add((r["id"], oid))
+            linked.add((oid, r["id"]))
+            acted += 1
+
+    if not dry_run:
+        conn.commit()
+    return result
 
 
 def _delete_memory(conn: sqlite3.Connection, memory_id: str) -> None:

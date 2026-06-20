@@ -10,6 +10,7 @@ from .tools.forget import brain_forget as _forget
 from .tools.graph import brain_graph as _graph
 from .tools.recall import brain_recall as _recall
 from .tools.save import brain_save as _save
+from .tools.unlink import brain_unlink as _unlink
 from .tools.update import brain_update as _update
 from .tools.session import (
     brain_session_save as _session_save,
@@ -111,6 +112,32 @@ def brain_forget(memory_id: str) -> str:
         memory_id: The ID of the memory to delete (from brain_recall results).
     """
     result = _forget(get_conn(), memory_id)
+    return json.dumps(result, indent=2)
+
+
+# ── brain_unlink ──────────────────────────────────────────────────────────
+
+@mcp.tool()
+def brain_unlink(
+    source_id: str,
+    target_id: str,
+    relation_type: str,
+    restore_importance: bool = True,
+) -> str:
+    """Delete a single relation edge between two memories (the inverse of a belief-revision link).
+
+    Use to undo a WRONG supersedes/contradicts edge (e.g. an auto-detected or batch link that
+    hid a still-valid memory) without deleting either memory. For a `supersedes` edge, the target
+    was hidden from recall by SUPERSEDED_FILTER and its importance halved at link time; unlinking
+    restores both (importance restore is on by default).
+
+    Args:
+        source_id: The source memory ID of the edge.
+        target_id: The target memory ID of the edge.
+        relation_type: causes, fixes, contradicts, relates_to, used_in, part_of, supersedes.
+        restore_importance: For supersedes, undo the save-time importance demotion on the target.
+    """
+    result = _unlink(get_conn(), source_id, target_id, relation_type, restore_importance)
     return json.dumps(result, indent=2)
 
 

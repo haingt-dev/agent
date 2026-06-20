@@ -672,3 +672,62 @@ Context approaching limit → /compact triggered
 | **Cross-device sync** | When Hải works from multiple machines | Large — replicate brain.db via Syncthing or add cloud backend |
 | **Memory importance scoring** | When brain has 500+ memories AND recall returns too many low-value results | Medium — add importance field, factor into RRF scoring |
 | **Conversation memory table** | When pre-compact snapshots aren't sufficient AND full conversation replay is needed | Large — would require parsing transcript_path on every message, significant storage |
+
+## 17. Belief Revision & Contradiction Handling
+
+**Problem.** The store is similarity-retrieval over independent chunks. When a newer
+memory corrects an older one ("Wednesday ate banana" → "couldn't buy banana, ate apple
+instead"), both rows survive every dedup gate (similar but not identical), recall ranks
+them with no recency signal (`ORDER BY rrf_score*(0.5+0.5*importance)` has no time term),
+so both co-surface and the reader can't tell which is current.
+
+The audit (1948 memories) split this into three problems, only one a true contradiction:
+- **P1 — stale-but-unlinked:** ~35 memories self-declare `[SUPERSEDED]`/`RETIRED` in content
+  but carry no `supersedes` edge, so `SUPERSEDED_FILTER` never hides them.
+- **P2 — duplicate-spam:** the same fact saved many times (one decision saved 7×).
+- **P3 — genuine belief-revision:** small; many are "true-then, state-changed" (finance
+  versions, growth metrics) that should be KEPT and flagged, not hidden.
+
+**Two edge semantics.** `supersedes` HIDES the target (`SUPERSEDED_FILTER`); `contradicts`
+SURFACES both (read-time flag). A genuine revision defaults to `contradicts` and only
+escalates to `supersedes` when explicit reversal language is present ("instead", "no longer",
+"reversed", "RETIRED", "now corrected") — preserving history by default, hiding only when a
+value is plainly wrong.
+
+**Anti-series guard (the load-bearing safety).** Cosine cannot separate the classes —
+duplicate-spam (0.90-0.99), formulaic phase-log series (0.89-0.94), and real corrections
+(0.83-0.93) overlap, and gpt-5.4-nano was measured to OVER-CALL phase logs (`P-Combat-a` vs
+`P-Combat-b`) as corrections. `contradiction.is_series_pair()` (regex on
+`EXECUTED|GREEN|ADR-\d+|Tier \d|P-\d|LANDED|milestone` + dated-measurement series) runs BEFORE
+the LLM and short-circuits such pairs to `unrelated`. Conservative — when in doubt it returns
+True, protecting project history.
+
+**Defense in depth (4 layers; `contradiction.py` is the shared engine):**
+
+| Layer | Where | What | Default |
+|-------|-------|------|---------|
+| Read-time conflict-surface | `search.cluster_conflicts` + `recall.py` | Tags the newer of a same-subject divergent pair `_current`, the older `_superseded_candidate "Nd ago"`. Annotation only. First consumer of the `contradicts` edge. The live net for every unlinked pair. | ON |
+| Write-time near-dup guard | `save.py` | Same-type cosine ≥ 0.92 → skip the insert (stops P2 at source). | ON (`BRAIN_NEAR_DUP_GUARD`) |
+| Write-time auto-revision | `save.py` → `contradiction.classify_pair` | On an in-band sibling, create a `contradicts`/`supersedes` edge. | OFF (`BRAIN_AUTO_SUPERSEDE`) until re-audit |
+| Batch supersede_pass | `consolidate.py` | Back-catalog cleaner. NOT in `SAFE_STRATEGIES`, NEVER deletes (vs `merge_duplicates` 0.95 which does), dry-run-first. | explicit `strategies={"supersede"}` |
+
+**The brake.** `brain_unlink(source, target, relation_type)` removes a single edge (restoring
+the target's importance for `supersedes`) — the reversible undo for any auto/batch link. It
+ships and is tested before any auto-writer runs.
+
+**Tools/scripts.** `scripts/backfill_supersede.py` (P1 — direction from passive/active marker
+grammar, ANN-resolves id-less cases), `scripts/cleanup_p2_dupes.py` (label unify + reversible
+dedup), `scripts/audit_contradictions.py` (the re-audit measuring residual
+unlinked-contradiction; the gate for flipping `BRAIN_AUTO_SUPERSEDE` live).
+
+**Env flags:** `BRAIN_NEAR_DUP_GUARD` (true), `BRAIN_NEAR_DUP_THRESHOLD` (0.92),
+`BRAIN_AUTO_SUPERSEDE` (false), `BRAIN_SUPERSEDE_MIN_CONF` (0.85),
+`BRAIN_SUPERSEDE_MAX_PER_RUN` (40), `BRAIN_CONTRADICTION_MODEL` (= `JUDGE_MODEL`).
+
+**Decay interaction.** Decay is keyed on `days_since_access`, not creation, and is currently
+disabled (the curve would prune 32% — pending retune). The contradiction bug *sabotages*
+decay: serving both rows keeps the stale one "accessed" so it never sinks — which is why the
+edge/flag must stop the serve first; decay is downstream. The read-time recency cue is a
+LOCAL tie-break within a conflict cluster (not a global ORDER BY term), so it does not
+double-count with decay's access axis once decay returns. Back-fill-demoted ids are logged to
+`brain_meta.p1_backfill_affected_ids` for exclusion from the decay re-tune.
