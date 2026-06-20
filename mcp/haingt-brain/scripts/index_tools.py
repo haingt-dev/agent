@@ -95,6 +95,7 @@ MCP_TOOLS = [
     ("haingt-brain", "brain_tools", "Semantic Toolbox — find the right tool/skill for a task by meaning", "memory"),
     ("haingt-brain", "brain_session", "Session lifecycle — start, save learnings, check status", "memory"),
     ("haingt-brain", "brain_graph", "Traverse knowledge graph from a memory entity", "memory"),
+    ("haingt-brain", "brain_unlink", "Remove one relation edge between two memories — the undo/brake for a WRONG supersedes or contradicts (belief-revision) link; restores the supersede importance demotion and hides nothing, deletes neither memory", "memory"),
 
     # Civitai (project-scoped → home-server; image-gen model/prompt mining for Forge.
     # Names captured live 2026-06-13. Skipped get-by-ID/hash plumbing (get_model,
