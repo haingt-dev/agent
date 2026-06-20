@@ -135,6 +135,7 @@ def query_context(project: str | None, source: str = "startup") -> str:
                WHERE type IN ('decision', 'discovery')
                  AND (project = ? OR project IS NULL)
                  AND created_at >= datetime('now', '-7 days')
+                 AND id NOT IN (SELECT target_id FROM relations WHERE relation_type = 'supersedes')
                ORDER BY
                  CASE WHEN type = 'decision' THEN 0 ELSE 1 END,
                  COALESCE(importance, 0.5) DESC,
@@ -158,6 +159,7 @@ def query_context(project: str | None, source: str = "startup") -> str:
             """SELECT id, content, COALESCE(updated_at, created_at) AS date FROM memories
                WHERE type = 'preference'
                  AND (project = ? OR project IS NULL)
+                 AND id NOT IN (SELECT target_id FROM relations WHERE relation_type = 'supersedes')
                ORDER BY updated_at DESC LIMIT 6""",
             (project,),
         ).fetchall()

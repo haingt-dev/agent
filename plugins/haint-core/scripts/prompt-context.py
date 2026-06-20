@@ -206,13 +206,16 @@ LLM_CLASSIFIER_TIMEOUT = 2.0  # synchronous pre-prompt gate — cap the tail, fa
 # Cached prefix billed at 10% standard rate; cache TTL 5-10 min in-memory.
 LLM_CLASSIFIER_SYSTEM = (
     "You are a memory gatekeeper for an AI coding assistant. Each user prompt arrives "
-    "and you must decide whether to inject relevant past memory context (prior decisions, "
+    "and you decide whether to inject relevant past memory context (prior decisions, "
     "patterns, discoveries, file/module knowledge) before the assistant responds. "
-    "Memory injection is expensive — it costs tokens, consumes attention budget, and "
-    "risks introducing irrelevant context that degrades reasoning quality. This effect "
-    "is documented in the First Drop of Ink research (arXiv 2605.10828): even 10% hard "
-    "distractors cause ~55% of total performance degradation in long-context reasoning. "
-    "Your goal: be selective. Approve injection only when memory provides DECISIVE benefit. "
+    "DEFAULT TO INJECTING. This user's work is deeply tied to prior decisions, preferences, "
+    "and project state, so memory usually helps — and missing it produces worse, "
+    "less-grounded answers. Reject ONLY when the prompt is clearly noise that memory cannot "
+    "improve: a bare acknowledgment, conversational filler, or a generic public-knowledge "
+    "lookup with no project tie. When in doubt, ALLOW. (The First Drop of Ink research, "
+    "arXiv 2605.10828, shows irrelevant context can distract in long-context reasoning — but "
+    "stale and superseded memories are already filtered out upstream, so your job is purely "
+    "the relevance call, and it is biased toward allow.) "
     "\n\n"
     "OUTPUT FORMAT (strict): exactly one token — 'yes' to allow injection, 'no' to reject. "
     "No punctuation, no explanation, no markdown, no quotes. Just yes or no.\n\n"
@@ -235,14 +238,15 @@ LLM_CLASSIFIER_SYSTEM = (
     "- Is a code task that can be answered by reading the current open file\n"
     "- Mentions only common terms (variables, functions) without project-specific context\n\n"
     "DECISION HEURISTICS:\n"
-    "- When uncertain between allow and reject, prefer ALLOW. Cost of false negative (lost "
-    "context, worse reasoning) > cost of false positive (wasted tokens, mild distractor risk).\n"
-    "- However, if the prompt is clearly a continuation phrase ('ok let me try that') with "
-    "no anchor to specific past work, reject.\n"
-    "- If the prompt mentions a proper noun or capitalized identifier, that's usually a "
-    "strong signal to allow (project entity, file, concept).\n"
-    "- Generic technical terms used in their dictionary meaning (e.g., 'database', 'function') "
-    "without project anchor do not warrant injection.\n\n"
+    "- DEFAULT is ALLOW. Reject only on a clear noise signal from the REJECT list above; "
+    "everything else gets injection.\n"
+    "- When uncertain, ALLOW. Cost of false negative (lost context, worse reasoning) clearly "
+    "exceeds cost of false positive (a few wasted tokens; staleness is already filtered upstream).\n"
+    "- A proper noun, capitalized identifier, file path, or named concept → ALLOW (project anchor).\n"
+    "- Reject a continuation phrase ('ok let me try that') ONLY when it has no anchor to specific "
+    "past work; if it names any file, module, or concept, ALLOW.\n"
+    "- Generic technical terms in their dictionary meaning (e.g., 'database', 'function') do not "
+    "BY THEMSELVES warrant injection — but do not reject a prompt that also carries any project signal.\n\n"
     "EDGE CASES:\n"
     "- Vietnamese-English mixed prompts: treat the same — judge on intent, not language.\n"
     "- Imperatives ('fix the bug', 'rename foo'): allow only if a specific named target is "
@@ -471,13 +475,15 @@ def should_skip_brain(prompt: str) -> tuple[bool, str]:
     if (not heuristic_skip) and llm_decision == "include":
         return False, "agree_include"
 
-    # Disagreement — LLM wins (sees full context, not just prefix patterns)
+    # Disagreement is ASYMMETRIC. The LLM may RESCUE a heuristic skip (prefix
+    # patterns miss real file/context anchors), but may NOT veto a heuristic
+    # include: the old veto path (llm_only_skip) fired 84x against a ~97%-skip-
+    # biased nano, dropping useful context (measure-first review 2026-06-21).
+    # Heuristic-include always wins; the LLM's skip vote is logged, not obeyed.
     if heuristic_skip and llm_decision == "include":
-        return False, f"llm_override_pattern:{heuristic_name}"
-    if (not heuristic_skip) and llm_decision == "skip":
-        return True, "llm_only_skip"
-
-    return False, "include"  # defensive fallthrough
+        return False, f"llm_rescue:{heuristic_name}"
+    # (not heuristic_skip) and llm_decision == "skip" → keep include.
+    return False, "llm_skip_ignored"
 
 
 def _log_skip(reason: str, prompt: str) -> None:
@@ -782,6 +788,7 @@ def _fts_search(
                  AND m.type NOT IN ('tool', 'session')
                  AND COALESCE(m.importance, 0.5) >= 0.3
                  AND (m.project = ? OR m.project IS NULL)
+                 AND m.id NOT IN (SELECT target_id FROM relations WHERE relation_type = 'supersedes')
                ORDER BY rank
                LIMIT 20""",
             (fts_query, project),
@@ -815,6 +822,7 @@ def _vec_search_general(
             WHERE m.type NOT IN ('tool', 'session')
               AND COALESCE(m.importance, 0.5) >= 0.3
               AND (m.project = :project OR m.project IS NULL)
+              AND m.id NOT IN (SELECT target_id FROM relations WHERE relation_type = 'supersedes')
             ORDER BY v.distance
             LIMIT 20""",
             {"embedding": emb_bytes, "fetch_k": VEC_FETCH_K, "project": project},
