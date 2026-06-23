@@ -1,6 +1,6 @@
 {
   "name": "godot-dev",
-  "description": "Godot 4.x debugging, GDScript patterns, standardized project status (docs/STATUS.md), and bundled godot-mcp server (Coding-Solo, probe-verified 2026-06-12) — for The Ninth Bride (chimera) and IronCradle",
-  "version": "2.4.0",
+  "description": "Godot 4.x indie-gamedev toolkit — GDD authoring (docs/gdd Obsidian folder), debugging, GDScript patterns, status dashboard, scene scaffolding + bundled godot MCP.",
+  "version": "3.0.0",
   "author": { "name": "Hai" }
 }

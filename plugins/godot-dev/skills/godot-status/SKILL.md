@@ -1,6 +1,6 @@
 ---
 name: godot-status
-description: "Check or initialize a project's standardized status dashboard at docs/STATUS.md. Use whenever the user asks 'where is this project at', 'check status', 'project status', 'what's the state / what's next here', or runs /godot-status — and to set up status tracking the first time (init) on a repo with no STATUS.md. Reads the STATUS.md convention and reconciles it against live git / tests / code / memory so the dashboard never silently goes stale. Godot-aware (engine version, GUT) but works on any repo. Reach for it even when the user only implies they want a state-of-the-project readout."
+description: "Check or initialize a project's docs/STATUS.md status dashboard."
 model: sonnet
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git *), Bash(find *), Bash(wc *), Bash(godot *), mcp__haingt-brain__brain_recall
 ---

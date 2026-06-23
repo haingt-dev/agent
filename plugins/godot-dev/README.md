@@ -4,9 +4,18 @@ Godot 4.x development skills + bundled MCP server for Claude Code.
 
 ## Skills
 
-- **godot-gdscript-patterns**: State machines, autoloads, resources, object pooling, component system, scene management, save system, performance tips
-- **godot-debugging**: Error interpretation, common bugs, debugging techniques, Godot 4 migration issues
-- **godot-status**: Standardized project status dashboard (docs/STATUS.md convention)
+- **godot-write-gdd**: author/update the project's GDD as a `docs/gdd/` self-contained Obsidian folder (master index + section notes; Summary/Core/Features/Content taxonomy)
+- **godot-check-gdd**: check recent code changes against the GDD pillars + sections (drift / scope-creep alignment)
+- **godot-new-scene**: scaffold a `.tscn`+`.gd` following the project's existing layout
+- **godot-status**: standardized project status dashboard (`docs/STATUS.md` convention)
+- **godot-debugging**: error interpretation, common bugs, Godot 3→4 migration
+- **godot-gdscript-patterns**: state machines, autoloads, resources, pooling, component system, save system, performance
+
+Skill `description`s are kept terse on purpose — discovery is driven by the brain Semantic Toolbox (`brain_tools`), curated via `/toolbox-curator`, not by verbose frontmatter. Tool/MCP routing → [`references/mcp-routing.md`](references/mcp-routing.md).
+
+### GDD convention (`docs/gdd/`)
+
+A project's GDD lives in the repo at `docs/gdd/` as a **self-contained Obsidian "mini-vault"** — a master index note + single-concern section notes, opened directly in Obsidian. Modular wiki over a monolith; a stable **Core** (pillars → loops → progression) anchors evolving **Features**/**Content**. `godot-write-gdd` authors it; templates live in that skill's `references/`. (Lint/test are intentionally NOT skills — `/ship` + the project's git Stop-hook cover gdformat/GUT.)
 
 ## MCP server (since v2.4.0)
 

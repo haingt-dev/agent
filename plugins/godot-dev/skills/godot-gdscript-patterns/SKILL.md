@@ -1,6 +1,6 @@
 ---
 name: godot-gdscript-patterns
-description: "Godot 4.x GDScript architecture patterns and project conventions. Guides pattern selection, enforces naming/typing conventions, and provides on-demand implementation references."
+description: "Godot 4.x GDScript architecture patterns + naming/typing conventions."
 model: sonnet
 allowed-tools: Read, Grep, Glob
 ---
