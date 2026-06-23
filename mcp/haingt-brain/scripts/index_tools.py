@@ -126,47 +126,6 @@ MCP_TOOLS = [
     ("st", "st_save_worldinfo", "Overwrite a SillyTavern World Info lorebook (full data dict) — read first to merge rather than blow away entries.", "sillytavern"),
     ("st", "st_get_recent_chat", "List recent chat sessions for a SillyTavern character (metadata: file, size, last message).", "sillytavern"),
 
-    # Aseprite (project-scoped → chimera; the pixel-art ASSEMBLY + QA layer, driving Steam
-    # Aseprite 1.3.17.2 fully headless via the diivi/aseprite-mcp 104-tool build. Captured
-    # live 2026-06-13, REFRESHED 2026-06-18 after our group-support PRs merged upstream
-    # (#18 group-aware find_layer + #19 add_group / add_layer group param). CURATED to the
-    # task-discoverable jobs in art-pipeline.md §4.5 — the ~67 omitted tools are granular
-    # siblings (no-suffix draw variants, per-cel/-frame/-slice/-tile getters+setters, region/
-    # onion-skin/merge/flip/rotate primitives) folded into the descriptions below; reach for
-    # them via §4.5 once in-flow. Standing law: layer GROUPS now supported on the CREATE/TARGET
-    # path — draw/edit/create tools resolve a `group/child` layer path, add_group + add_layer's
-    # group param create into groups (#18/#19); BUT enumerating readers (get_sprite_info,
-    # audit_animation) still list only top-level layers — use export_layers / run_lua_script to
-    # see inside groups. RGB masters only for palette/read ops, trust result-text not transport-ok.
-    # NOT a generator — NINE/enemies stay on the SD pipeline; this is assembly/QA. Full verified
-    # table + guardrails = §4.5.)
-    ("aseprite", "create_canvas", "Create a new Aseprite sprite/canvas (always RGB) — scaffold a sprite at a given size. Silently overwrites an existing file; copy_sprite first. Tạo file sprite mới.", "pixelart"),
-    ("aseprite", "add_layer", "Add a layer to an Aseprite sprite — optional group param nests it inside a named group (name or 'group/subgroup' path; #19). Create the group first with add_group. Thêm layer (vào group nếu cần).", "pixelart"),
-    ("aseprite", "import_image_as_layer", "Import a PNG/image into an Aseprite sprite as a new layer at an exact offset — Stage-2 PNG → master import.", "pixelart"),
-    ("aseprite", "copy_layers_between_sprites", "Copy named layers from one Aseprite sprite into another, pixel-exact — the PNG→master import (a PNG's single layer is named 'Layer'; no size guard, check dims first). Import ảnh SD vào master sprite.", "pixelart"),
-    ("aseprite", "set_tag", "Create/update an animation tag — a named frame range + direction (forward/reverse/pingpong) on an Aseprite sprite. Build ALL frames before tagging (bounds are strict). Sibling: delete_tag.", "pixelart"),
-    ("aseprite", "apply_dither_gradient", "Apply a dithered gradient in Aseprite — on-palette, normalize-safe shading. PREFER for on-palette work; sibling apply_dither_pattern for pattern fills (apply_gradient_rect is normalize-safe too since #24, just not palette-aware).", "pixelart"),
-    ("aseprite", "draw_pixels", "Draw a batch of individual pixels in Aseprite from an {x,y,color} list — the freehand / ASCII-grid workflow (#RRGGBB or #RRGGBBAA per-pixel alpha since #24). Targeted geometric draws = the draw_*_at variants (line/rectangle/circle/ellipse/fill_area).", "pixelart"),
-    ("aseprite", "remap_colors_in_cel_range", "Remap exact colors across an Aseprite layer/frame range via explicit mappings — the corruption value-band swap (bright→dark, §9.1). False-succeeds silently — readback-verify every call. Đổi màu corruption.", "pixelart"),
-    ("aseprite", "generate_color_ramp", "Generate a hue-shifted dark→light shading ramp from a base color in Aseprite — color-blind value ramps (keep lightness_range ≤0.5 or the darkest step clamps to #000000). Returns a hex array.", "pixelart"),
-    ("aseprite", "set_palette", "Set/replace an Aseprite sprite's color palette. Siblings: get_palette (read), apply_palette_preset + list_palette_presets (built-in presets).", "pixelart"),
-    ("aseprite", "quantize_to_palette", "Snap every pixel of an Aseprite sprite to the nearest palette color (RGB distance) — machine palette enforcement (§9.1), run after set_palette/apply_palette_preset. RGB-only; verify unique_colors == palette size. Ép palette / quantize.", "pixelart"),
-    ("aseprite", "get_color_stats", "Get color statistics of an Aseprite sprite — accurate unique-color count, sees inside groups (the palette-audit instrument). RGB-only. Đếm màu / audit palette.", "pixelart"),
-    ("aseprite", "audit_animation", "Audit an Aseprite animation — per-layer/per-frame cel report for QA (audits TOP-LEVEL layers only — counts a group as one layer, skips cels nested inside it; populated JSON since PR#12).", "pixelart"),
-    ("aseprite", "get_sprite_info", "Get Aseprite sprite metadata — size, layers (now recursed: every layer carries a parent, null at top level, since #22), frames, tags. The QA readback. Visible/composite pixel = get_composite_pixel.", "pixelart"),
-    ("aseprite", "get_pixel_color", "Read the color of a single pixel in an Aseprite sprite — readback-verify after unchecked draws (pass an explicit layer_name; reads ONE cel). Bulk = get_pixels_rect; the VISIBLE composite of all layers = get_composite_pixel / get_composite_rect (#20).", "pixelart"),
-    ("aseprite", "create_slice", "Create a named slice (a rectangular game-engine region / 9-patch / atlas frame) in an Aseprite sprite. Siblings: set_slice_center (9-patch), set_slice_pivot, list_slices (JSON-safe for any name since #21), delete_slice.", "pixelart"),
-    ("aseprite", "create_tilemap_layer", "Create a tilemap layer with its own tileset in Aseprite — level/tileset authoring (tile index 0 = empty). Siblings: draw_on_tile, set_tiles, get_tile_at, get_tilemap_info.", "pixelart"),
-    ("aseprite", "export_sprite", "Export an Aseprite sprite to PNG (multi-frame fans out to name1..N.png, digit-free basenames). Xuất PNG.", "pixelart"),
-    ("aseprite", "export_layers", "Export each Aseprite layer as its own PNG — native --split-layers, the one export that PIERCES groups (incl. group children).", "pixelart"),
-    ("aseprite", "export_spritesheet", "Export an Aseprite sprite as a packed spritesheet + JSON atlas (validates the tag). Xuất spritesheet.", "pixelart"),
-    ("aseprite", "run_lua_script", "Run arbitrary Aseprite Lua in batch mode — the escape hatch for anything no tool covers (reproduces celdump / palette_audit). Does NOT auto-save (spr:saveAs required) and returns BLANK on error (use print() markers to verify).", "pixelart"),
-    ("aseprite", "cvd_palette_audit", "Audit an Aseprite palette/ramp for colour-blind collisions — simulates protan/deuter/tritan (libDaltonLens, byte-for-byte == the AseCvdSim extension) and flags pairs distinct to normal vision but COLLAPSING for CVD viewers. The ~8% colour-blind accessibility gate the (normal-vision) dev can't self-check. Kiểm tra mù màu / CVD.", "pixelart"),
-    ("aseprite", "value_contrast_check", "Check WCAG value-contrast between two corruption-stage ramps in Aseprite (assert ≥ min_ratio, default 3:1) — the corruption-stage readability gate (the value jump must read instantly + in grayscale). Sibling value_monotonic_check (ramp luminance strictly dark→light, the Tier-3 EXIT criterion). Kiểm tra tương phản value.", "pixelart"),
-    ("aseprite", "kcentroid_downscale", "Content-aware downscale (kCentroid) of an image via Aseprite-MCP — dominant-colour-per-tile, keeps the hard pixel silhouette that naive nearest/lanczos blurs. The FAITHFUL many-colour Stage-2 AI→grid downscale (+ optional MAXCOVERAGE quantize); k-means AVERAGES per tile so it invents intermediate colours (unpredictable) — for the predictable value-first block-in use value_blockin_downscale (§3.6). Needs the numpy/pillow 'chimera' extra. Downscale ảnh AI thành pixel (giữ nhiều màu).", "pixelart"),
-    ("aseprite", "value_blockin_downscale", "Predictable value-first downscale via Aseprite-MCP — grayscale → posterize to N levels → MODE downscale (most-frequent EXISTING value per tile), so output is GUARANTEED a subset of the N chosen values (0 invented colours; self-reports invented=0 + the K used). Method-of-record for the value-first hand-author path (§3.6): turns an AI render into a clean N-value silhouette + value block-in to refine by hand, COLOUR LAST. Distinct from kcentroid_downscale (k-means averages → invents colours, for a faithful many-colour downscale). levels=N (default 5), supersample=0=auto-K (working≈source, the orphan floor). Grayscale PNG out; needs the numpy/pillow 'chimera' extra. Downscale render thành block-in value sạch (đoán trước được) để pixel tay.", "pixelart"),
-    ("aseprite", "extract_palette", "Extract an OPTIMAL palette from an Aseprite sprite via native ColorQuantization (true extraction, vs quantize_to_palette's nearest-snap) — returns the built palette and writes it to the sprite. Trích palette tối ưu từ art.", "pixelart"),
-    ("aseprite", "apply_convolution", "Apply a native Aseprite convolution filter — blur / sharpen / edge / emboss (38 built-in matrices; list_convolution_matrices for the names). Engine-quality. Siblings (native app.command filters, optional region scope): outline_native, adjust_hsl_native, adjust_brightness_contrast, invert_colors.", "pixelart"),
 ]
 
 # ── Plugin-bundled MCP Tools ─────────────────────────────────────────────────
@@ -815,10 +774,8 @@ def main():
         ("schedule a recurring cloud agent", None),
         ("what books do I own about pixel art", None),
         ("create a new skill from scratch and run evals", None),
-        ("debug a gdscript null-reference error in godot", "chimera"),
-        ("create a new godot scene with a Node2D root", "chimera"),
-        ("quantize a sprite to its palette in aseprite", "chimera"),
-        ("downscale a render into a predictable value block-in for hand-pixeling", "chimera"),
+        ("debug a gdscript null-reference error in godot", "broodkeeper"),
+        ("create a new godot scene with a Node2D root", "broodkeeper"),
     ]
     for query, project in tests:
         results = brain_tools(conn, query, k=1, project=project)
@@ -834,21 +791,15 @@ def main():
     print("\n=== Cross-project scope (no leaks) ===")
     scope_cases = [
         # (query, project, substring-expected-in-top3, present_expected)
-        ("debug a gdscript error and inspect the godot scene tree", "chimera", "godot", True),
-        ("debug a gdscript error and inspect the godot scene tree", "IronCradle", "godot", True),
-        ("debug a gdscript error and inspect the godot scene tree", "digital-identity", "godot", False),
         ("save this article to my reading list and tag it", "digital-identity", "reader", True),
         ("save this article to my reading list and tag it", "chimera", "reader", False),
         ("save this article to my reading list and tag it", "Bookie", "reader", False),
-        # plugin-bundled godot MCP tools — chimera+IronCradle only (godot-dev plugin scope)
-        ("create a new godot scene and add a sprite node", "chimera", "create_scene", True),
-        ("create a new godot scene and add a sprite node", "IronCradle", "create_scene", True),
+        # plugin-bundled godot MCP tools — broodkeeper only (active primary build;
+        # chimera + IronCradle postponed → godot-dev disabled in their settings.json, 2026-06-23)
+        ("create a new godot scene and add a sprite node", "broodkeeper", "create_scene", True),
+        ("create a new godot scene and add a sprite node", "chimera", "create_scene", False),
+        ("create a new godot scene and add a sprite node", "IronCradle", "create_scene", False),
         ("create a new godot scene and add a sprite node", "digital-identity", "create_scene", False),
-        ("create a new godot scene and add a sprite node", "Bookie", "create_scene", False),
-        # aseprite MCP tools — chimera only
-        ("quantize a sprite to its palette and audit colors", "chimera", "quantize", True),
-        ("quantize a sprite to its palette and audit colors", "IronCradle", "quantize", False),
-        ("quantize a sprite to its palette and audit colors", "digital-identity", "quantize", False),
     ]
     scope_ok = True
     for query, proj, needle, expect in scope_cases:
