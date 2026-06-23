@@ -69,11 +69,15 @@ REGISTRY="$HOME/Projects/agent/registry.json"
 if [ -f "$REGISTRY" ] && command -v jq &>/dev/null; then
     existing=$(jq -r --arg n "$PROJECT_NAME" '.projects[$n] // empty' "$REGISTRY")
     if [ -z "$existing" ]; then
-        # Detect project type
+        # Detect project type. NB: dir is freshly scaffolded, so a godot/infra
+        # marker often doesn't exist yet → defaults to "app"; /project-creator
+        # patches the real type (e.g. godot) once it's known.
         PROJECT_TYPE="app"
-        [ -f "$PROJECT_PATH/project.godot" ] && PROJECT_TYPE="godot"
-        [ -f "$PROJECT_PATH/docker-compose.yml" ] || [ -f "$PROJECT_PATH/docker-compose.yaml" ] && PROJECT_TYPE="infra"
-        [ -f "$PROJECT_PATH/Dockerfile" ] && [ "$PROJECT_TYPE" = "app" ] && PROJECT_TYPE="infra"
+        if [ -f "$PROJECT_PATH/project.godot" ]; then
+            PROJECT_TYPE="godot"
+        elif [ -f "$PROJECT_PATH/docker-compose.yml" ] || [ -f "$PROJECT_PATH/docker-compose.yaml" ] || [ -f "$PROJECT_PATH/Dockerfile" ]; then
+            PROJECT_TYPE="infra"
+        fi
 
         REAL_PATH=$(cd "$PROJECT_PATH" && pwd)
         jq --arg name "$PROJECT_NAME" \
@@ -82,21 +86,13 @@ if [ -f "$REGISTRY" ] && command -v jq &>/dev/null; then
            '.projects[$name] = {
                "path": $path,
                "type": $type,
-               "status": "active",
-               "bootstrapped": true,
-               "plugins": [],
-               "rules": [],
-               "mcps": [],
-               "skills": [],
-               "notes": ""
+               "summary": ""
            }' "$REGISTRY" > "$REGISTRY.tmp" && mv "$REGISTRY.tmp" "$REGISTRY"
         echo ""
-        echo "📋 Registered in hub registry (type: $PROJECT_TYPE)"
+        echo "📋 Registered in hub registry (type: $PROJECT_TYPE) — summary filled by /project-creator"
     else
-        # Update bootstrapped flag if needed
-        jq --arg name "$PROJECT_NAME" '.projects[$name].bootstrapped = true' "$REGISTRY" > "$REGISTRY.tmp" && mv "$REGISTRY.tmp" "$REGISTRY"
         echo ""
-        echo "📋 Registry entry exists (updated bootstrapped=true)"
+        echo "📋 Registry entry exists — no change"
     fi
 else
     echo ""

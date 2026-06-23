@@ -1,6 +1,9 @@
 #!/bin/bash
-# SessionStart hook (hub only): quick registry drift check
-# Runs silently on clean state, reports only drift
+# SessionStart hook (hub only): quick registry drift check.
+# Silent on clean state; prints only genuine drift (new dir / vanished path).
+# registry.json v2 = orientation catalog {path,type,summary,status?}; capability
+# lists are derived on demand, so the only drift is NEW (unregistered dir) or
+# STALE (registered path gone). Paths are absolute → no tilde expansion needed.
 
 HUB="$HOME/Projects/agent"
 REGISTRY="$HUB/registry.json"
@@ -11,35 +14,24 @@ command -v jq &>/dev/null || exit 0
 DRIFT=0
 ISSUES=""
 
-# Check for unregistered projects
+# New (unregistered) project dirs
 for dir in "$HOME/Projects"/*/; do
     name=$(basename "$dir")
-    [ "$name" = "agent" ] && continue
     registered=$(jq -r --arg n "$name" '.projects[$n] // empty' "$REGISTRY")
-    if [ -z "$registered" ]; then
-        ISSUES+="  NEW: $name (not registered)\n"
-        DRIFT=$((DRIFT + 1))
-    fi
+    [ -z "$registered" ] && ISSUES+="  NEW: $name (not registered)\n" && DRIFT=$((DRIFT + 1))
 done
 
-# Quick skill/plugin drift check per registered project
+# Stale (registered path gone)
 for name in $(jq -r '.projects | keys[]' "$REGISTRY"); do
     path=$(jq -r --arg n "$name" '.projects[$n].path' "$REGISTRY")
-    [ ! -d "$path" ] && ISSUES+="  STALE: $name (path gone)\n" && DRIFT=$((DRIFT + 1)) && continue
-
-    # Skills drift
-    registered_skills=$(jq -r --arg n "$name" '.projects[$n].skills // [] | sort | join(",")' "$REGISTRY")
-    actual_skills=""
-    if [ -d "$path/.claude/skills" ]; then
-        actual_skills=$(find "$path/.claude/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')
-    fi
-    [ "$registered_skills" != "$actual_skills" ] && ISSUES+="  DRIFT: $name skills changed\n" && DRIFT=$((DRIFT + 1))
+    path="${path/#\~/$HOME}"   # safety net for legacy ~ entries (v2 paths are absolute)
+    [ ! -d "$path" ] && ISSUES+="  STALE: $name (path gone)\n" && DRIFT=$((DRIFT + 1))
 done
 
 if [ "$DRIFT" -gt 0 ]; then
     echo ""
     echo "--- Registry Drift ($DRIFT) ---"
     printf "$ISSUES"
-    echo "Run: bash bin/ag-registry-audit.sh for details"
+    echo "Run: bash bin/ag-registry-audit.sh"
     echo "---"
 fi

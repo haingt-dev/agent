@@ -27,7 +27,7 @@ Claude Code is powerful but each project is an island. This hub provides the sha
 │   ├── bootstrap-project.sh   # Bootstrap new project + auto-register in hub
 │   ├── ag-registry-audit.sh   # Full drift check: registry vs actual state
 │   └── shell-aliases.sh       # Shell shortcuts (source in ~/.zshrc)
-├── registry.json              # Reverse index of all child projects
+├── registry.json              # Orientation catalog of all child projects
 ├── .claude/scripts/
 │   └── registry-check.sh      # SessionStart hook: lightweight drift alert
 ├── plugins/
@@ -82,16 +82,16 @@ Skills use YAML frontmatter for invocation control:
 
 ### Project Registry
 
-The hub maintains a reverse index (`registry.json`) of all child projects — which plugins, rules, skills, and MCPs each project uses.
+`registry.json` (v2) is an **AI/human orientation catalog** of all child projects — `{path, type, summary, status?}` per project: the facts the filesystem can't cheaply reveal. Capability lists (skills/plugins/rules/mcps) are **derived on demand** (`ls .claude/skills`, `jq .mcp.json`, `jq installed_plugins.json`) and deliberately **not stored** — `index_tools.py` already derives them from the filesystem, so a stored copy is redundant token-rent that drifts. `status` is omitted when `active` (default); set to `primary`/`postponed`/`archived` otherwise.
 
 | Component | Role |
 |-----------|------|
-| `registry.json` | Source of truth: project metadata, resources used |
-| `bin/ag-registry-audit.sh` | Full audit: compares registry against filesystem + installed_plugins.json |
-| `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, alerts on drift |
-| `bin/bootstrap-project.sh` | Auto-registers new projects on bootstrap |
+| `registry.json` | Orientation catalog: path, type, one-line summary, lifecycle status |
+| `bin/ag-registry-audit.sh` | Audit: every dir registered? every registered path exists? |
+| `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, flags NEW/STALE dirs |
+| `bin/bootstrap-project.sh` | Registers a slim stub on bootstrap; `/project-creator` fills the summary |
 
-**Drift detection**: hybrid pull model — hub SessionStart detects drift automatically, scripts that modify children update the registry as a side effect.
+**Drift detection**: the only drift is NEW (an unregistered `~/Projects/<dir>`) or STALE (a registered path that's gone). The hook flags it at SessionStart; a human resolves it. Registration happens via `bootstrap-project.sh` + `/project-creator` — there is no auto-sync/self-healing.
 
 ## Quick Commands
 

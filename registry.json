@@ -1,177 +1,73 @@
 {
-  "version": 1,
-  "description": "Hub registry — reverse index of which projects use which hub resources",
+  "v": 2,
   "projects": {
     "agent": {
-      "path": "~/Projects/agent",
+      "path": "/home/haint/Projects/agent",
       "type": "infra",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Claude Code plugin/skill hub — plugins, templates, registry for all projects",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "token-optimize-workspace"
-      ],
-      "notes": "Hub project. Life management skills moved to digital-identity."
+      "summary": "Claude Code plugin/skill hub — plugins, templates, bootstrap + registry for all projects."
     },
     "Bookie": {
-      "path": "~/Projects/Bookie",
+      "path": "/home/haint/Projects/Bookie",
       "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Reading community resource hub — AI book video production pipeline",
-      "plugins": [],
-      "rules": [],
-      "mcps": [
-        "notebooklm"
-      ],
-      "skills": [
-        "catalog-insights",
-        "create-storyboard",
-        "extract-notes",
-        "extract-notes-workspace",
-        "gen-image",
-        "generate-prompts",
-        "new-subproject",
-        "produce-video",
-        "write-metadata",
-        "write-video"
-      ],
-      "notes": "Media/video production workflow. Custom Bash hook for large media warnings."
+      "summary": "Reading community (9+ yrs) — AI book→video production pipeline."
+    },
+    "broodkeeper": {
+      "path": "/home/haint/Projects/broodkeeper",
+      "type": "godot",
+      "summary": "Premium offline single-player creature-raiser × auto-battler roguelite, combinatorial systems depth. SFW/all-ages, Godot 4.7. Supersedes chimera/The Ninth Bride (2026-06-22). Pre-production: GDD v1 done, next = art-free CORE prototype.",
+      "status": "primary"
     },
     "chimera": {
-      "path": "~/Projects/chimera",
+      "path": "/home/haint/Projects/chimera",
       "type": "godot",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Adult (18+) metroidvania in Godot 4.6 — codename Chimera, shipping title 'The Ninth Bride'. PRIMARY BUILD (pivot from IronCradle). Pre-production / art-gate.",
-      "plugins": [
-        "godot-dev"
-      ],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "check-gdd",
-        "gen-image",
-        "test",
-        "write-gdd"
-      ],
-      "notes": ""
+      "summary": "Adult (18+) metroidvania, Godot — codename Chimera / 'The Ninth Bride'. Superseded by broodkeeper 2026-06-22; design + NINE LoRA preserved, no resume plan.",
+      "status": "postponed"
     },
     "digital-identity": {
-      "path": "~/Projects/digital-identity",
+      "path": "/home/haint/Projects/digital-identity",
       "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Personal profile center — centralized identity for AI context, CVs, and blog",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "compile",
-        "reflect",
-        "arrange",
-        "finance"
-      ],
-      "notes": "Personal profile center. Life management skills: quest + track moved to global, reschedule-quest merged into arrange, tempo deleted."
+      "summary": "Personal profile center — centralized identity for AI context, CVs, and blog."
+    },
+    "godot-pixel-cutout-rig": {
+      "path": "/home/haint/Projects/godot-pixel-cutout-rig",
+      "type": "godot",
+      "summary": "Godot 4.7 tool — animate 2D pixel characters via cutout rigging (Node2D bone tree). Public-ish (CHANGELOG/CONTRIBUTING)."
+    },
+    "home-server": {
+      "path": "/home/haint/Projects/home-server",
+      "type": "infra",
+      "summary": "Home server stack — dashboard + SD-Forge (gen-art backend) + ebooks/services. Self-hosted infra."
     },
     "Idea_Vault": {
-      "path": "~/Projects/Idea_Vault",
+      "path": "/home/haint/Projects/Idea_Vault",
       "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Personal knowledge base in Obsidian — notes, ideas, research",
-      "plugins": [],
-      "rules": [],
-      "mcps": [
-        "obsidian"
-      ],
-      "skills": [
-        "create-note",
-        "obsidian-bases",
-        "obsidian-markdown"
-      ],
-      "notes": "Obsidian/note-taking workspace."
+      "summary": "Personal knowledge base in Obsidian — notes, ideas, research."
     },
-    "media-server": {
-      "path": "~/Projects/media-server",
-      "type": "infra",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Docker-based home media server stack",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "stack-health",
-        "stack-up"
-      ],
-      "notes": "Docker-based media server stack."
-    },
-    "Wildtide": {
-      "path": "~/Projects/Wildtide",
+    "IronCradle": {
+      "path": "/home/haint/Projects/IronCradle",
       "type": "godot",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Open-world survival game in Godot 4.5 — dynamic ecosystem simulation",
-      "plugins": [
-        "godot-dev"
-      ],
-      "rules": [
-        "wildtide-conventions"
-      ],
-      "mcps": [],
-      "skills": [
-        "gen-image",
-        "lint",
-        "new-scene",
-        "test",
-        "update-mb",
-        "write-gdd"
-      ],
-      "notes": "Stop hook runs gdformat on modified .gd files."
-    },
-    "workstation-setup": {
-      "path": "~/Projects/workstation-setup",
-      "type": "infra",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Fedora/Nobara workstation provisioning and configuration",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "test-setup",
-        "validate"
-      ],
-      "notes": "System/workstation configuration."
+      "summary": "Roguelike city builder (Godot), 1304/1304 tests green. Postponed indefinitely — preserved, no resume plan.",
+      "status": "postponed"
     },
     "Learning_English": {
-      "path": "~/Projects/Learning_English",
+      "path": "/home/haint/Projects/Learning_English",
       "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [
-        "gen-image"
-      ],
-      "notes": ""
+      "summary": "English learning workspace — vocabulary deck + spaced repetition."
     },
     "portfolio": {
-      "path": "~/Projects/portfolio",
+      "path": "/home/haint/Projects/portfolio",
       "type": "app",
-      "status": "active",
-      "bootstrapped": true,
-      "summary": "Public portfolio site — Astro + Cloudflare Pages, dog-fooding the website service offering",
-      "plugins": [],
-      "rules": [],
-      "mcps": [],
-      "skills": [],
-      "notes": "Static site, no skills needed. Upwork URL placeholder in Contact.astro needs real URL."
+      "summary": "Public portfolio site — Astro + Cloudflare Pages, haingt.dev."
+    },
+    "tools": {
+      "path": "/home/haint/Projects/tools",
+      "type": "app",
+      "summary": "Misc dev tools container — aseprite-mcp + pixeldetector (loose grab-bag, no git/.claude)."
+    },
+    "workstation-setup": {
+      "path": "/home/haint/Projects/workstation-setup",
+      "type": "infra",
+      "summary": "Fedora/Nobara workstation provisioning and configuration."
     }
   }
 }
