@@ -443,7 +443,7 @@ Indexes every capability Claude can invoke into brain as type="tool" memories wi
 
 **Scoping** (so brain_tools never suggests a tool unavailable in a project): a result surfaces only where available via `(project = ? OR project IS NULL)`. For tools, project=None means GLOBAL-ONLY, not all-projects — fixed in `search.py` (guarded by `memory_type=="tool"`) and `prompt-context.py`. Project-scoped skills/plugins/MCP servers never leak across projects.
 
-**Reindex = atomic build-then-prune**: snapshot old tool-ids → build the full new set (random-uuid rows can't collide with the snapshot) → prune the old snapshot. Readers always see ≥ the full set (never a partial-empty toolbox); interruption-safe.
+**Reindex = atomic build-then-prune**: snapshot old tool-ids → build the full new set → prune the old snapshot. Readers always see ≥ the full set (never a partial-empty toolbox); interruption-safe. This relies on every re-saved tool minting a FRESH row — so `main()` force-sets `BRAIN_NEAR_DUP_GUARD=false`. Without it, `brain_save`'s save-time near-dup guard (cosine ≥ 0.92 same-type) suppresses each re-saved tool as a duplicate of its own still-alive old row and returns the old id with no insert; the prune then deletes that row → the toolbox silently empties. Any reindex over a populated table corrupts it otherwise (incl. the auto-sync path).
 
 **Auto-sync**: the SessionStart hook `toolbox-sync.py` (wired in `~/.claude/settings.json`) fingerprints the skill/plugin/MCP-config surface + `index_tools.py`, then reindexes in the background only on change (flock-serialized, non-blocking). NOTE: hooks cannot enumerate live MCP *tool schemas* (CC limit — GH #6574/#26112), so project-scoped MCP servers' tools stay hand-curated in `MCP_TOOLS`.
 

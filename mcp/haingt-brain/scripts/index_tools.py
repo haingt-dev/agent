@@ -11,6 +11,7 @@ Usage: uv run python scripts/index_tools.py
 """
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -582,6 +583,14 @@ def validate_tool_index(conn) -> dict | None:
 # ── Main ──────────────────────────────────────────────────────────────────
 
 def main():
+    # The toolbox is a deterministic FULL REBUILD: snapshot-then-prune (below) relies on every
+    # brain_save minting a FRESH row. brain_save's near-dup guard (BRAIN_NEAR_DUP_GUARD, default
+    # ON) would instead suppress each re-saved tool as a "duplicate" of its own still-alive old
+    # row (cosine ≈ 1.0 ≥ 0.92), returning the old id with no new insert — and the end-of-run
+    # prune then deletes that old row, silently emptying the toolbox. Any reindex over a populated
+    # table corrupts it. Force the guard off for the rebuild so each save inserts unconditionally.
+    os.environ["BRAIN_NEAR_DUP_GUARD"] = "false"
+
     conn = connect()
     init_schema(conn)
 
