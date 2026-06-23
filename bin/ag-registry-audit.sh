@@ -49,6 +49,14 @@ for name in $(jq -r '.projects | keys[]' "$REGISTRY"); do
     fi
 done
 
+# 3. Narrative sync — registry's primary == the one the narrative surfaces crown
+echo "=== Narrative sync (registry primary vs ecosystem.md / core-memory) ==="
+if [ -f "$HUB/bin/registry-lib.sh" ]; then
+    source "$HUB/bin/registry-lib.sh"
+    sync_out=$(check_narrative_sync "$REGISTRY"); sync_rc=$?
+    [ "$sync_rc" -ne 0 ] && { red "$sync_out"; DRIFT=$((DRIFT + sync_rc)); }
+fi
+
 echo ""
 if [ "$DRIFT" -eq 0 ]; then
     green "Registry in sync. No drift."

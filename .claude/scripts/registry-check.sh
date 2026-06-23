@@ -28,6 +28,13 @@ for name in $(jq -r '.projects | keys[]' "$REGISTRY"); do
     [ ! -d "$path" ] && ISSUES+="  STALE: $name (path gone)\n" && DRIFT=$((DRIFT + 1))
 done
 
+# Narrative sync — registry primary must match what ecosystem.md / core-memory crown
+if [ -f "$HUB/bin/registry-lib.sh" ]; then
+    source "$HUB/bin/registry-lib.sh"
+    sync_lines=$(check_narrative_sync "$REGISTRY"); rc=$?
+    [ "$rc" -ne 0 ] && ISSUES+="$sync_lines\n" && DRIFT=$((DRIFT + rc))
+fi
+
 if [ "$DRIFT" -gt 0 ]; then
     echo ""
     echo "--- Registry Drift ($DRIFT) ---"

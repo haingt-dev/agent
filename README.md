@@ -91,7 +91,12 @@ Skills use YAML frontmatter for invocation control:
 | `.claude/scripts/registry-check.sh` | SessionStart hook: silent when clean, flags NEW/STALE dirs |
 | `bin/bootstrap-project.sh` | Registers a slim stub on bootstrap; `/project-creator` fills the summary |
 
-**Drift detection**: the only drift is NEW (an unregistered `~/Projects/<dir>`) or STALE (a registered path that's gone). The hook flags it at SessionStart; a human resolves it. Registration happens via `bootstrap-project.sh` + `/project-creator` — there is no auto-sync/self-healing.
+**Drift detection** (audit + SessionStart hook share `bin/registry-lib.sh` so the guard can't itself drift) flags three things:
+- **NEW** — an unregistered `~/Projects/<dir>`.
+- **STALE** — a registered path that's gone.
+- **NARRATIVE-SYNC** — the project the registry marks `status:primary` must be the one the always-loaded narrative surfaces crown: `indie-ecosystem.md` ("center of gravity" row) and `core-memory.md` ("PRIMARY BUILD = …" line). A pivot that updates the registry but forgets the narrative (or leaves two primaries) is flagged deterministically — so the canonical status and the loaded context can't silently desync.
+
+A human resolves flags; registration is via `bootstrap-project.sh` + `/project-creator`. No auto-sync/self-healing.
 
 ## Quick Commands
 
