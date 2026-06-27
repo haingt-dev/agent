@@ -1,5 +1,6 @@
 ---
 name: godot-new-scene
+model: haiku
 description: "Scaffold a new Godot scene + script following this project's existing layout + conventions."
 allowed-tools: Read, Write, Glob, Bash, AskUserQuestion
 argument-hint: "[scene_name]"

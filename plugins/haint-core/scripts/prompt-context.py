@@ -1111,26 +1111,32 @@ if __name__ == "__main__":
         # the no-embedding fallback only. Each tool suggested once per session.
         tool_names_to_save = None
         new_tool_chars = 0
-        prev_tools = load_last_tools()
-        already_suggested = load_suggested_tools()
-        tool_budget_used = load_tool_chars()
+        # Toolbox auto-inject is gated by BRAIN_TOOLBOX_AUTOINJECT (default "1" =
+        # on, preserving shipped plugin behavior). Set "0" to suppress per-prompt
+        # tool suggestions and rely on explicit brain_tools() calls instead —
+        # saves up to MAX_TOOL_INJECTED_CHARS (~1.7K tok) of injection per session.
+        # (token-audit 2026-06-27)
+        if os.environ.get("BRAIN_TOOLBOX_AUTOINJECT", "1") != "0":
+            prev_tools = load_last_tools()
+            already_suggested = load_suggested_tools()
+            tool_budget_used = load_tool_chars()
 
-        if embedding is not None:
-            tools = search_tools_vector(conn, embedding, project=project)
-        else:
-            tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS, project=project)
+            if embedding is not None:
+                tools = search_tools_vector(conn, embedding, project=project)
+            else:
+                tools = _fts5_tool_search(conn, normalized, limit=MAX_TOOL_RESULTS, project=project)
 
-        tools = [t for t in tools if t["name"] not in already_suggested][:MAX_TOOL_RESULTS]
-        current_tool_names = [t["name"] for t in tools]
-        # Skip if same tools as last prompt (avoid redundant system-reminders)
-        if current_tool_names != prev_tools and tools:
-            tool_text = "\n".join(f"- {t['name']}: {_flatten_clip(t['content'])}" for t in tools)
-            new_tool_chars = len(tool_text)
-            if tool_budget_used + new_tool_chars <= MAX_TOOL_INJECTED_CHARS:
-                sections.append("Relevant tools:\n" + tool_text)
-                # Toolbox telemetry — same blind spot as memories pre-audit
-                _bump_injected_access(conn, [t["id"] for t in tools if t.get("id")])
-        tool_names_to_save = current_tool_names
+            tools = [t for t in tools if t["name"] not in already_suggested][:MAX_TOOL_RESULTS]
+            current_tool_names = [t["name"] for t in tools]
+            # Skip if same tools as last prompt (avoid redundant system-reminders)
+            if current_tool_names != prev_tools and tools:
+                tool_text = "\n".join(f"- {t['name']}: {_flatten_clip(t['content'])}" for t in tools)
+                new_tool_chars = len(tool_text)
+                if tool_budget_used + new_tool_chars <= MAX_TOOL_INJECTED_CHARS:
+                    sections.append("Relevant tools:\n" + tool_text)
+                    # Toolbox telemetry — same blind spot as memories pre-audit
+                    _bump_injected_access(conn, [t["id"] for t in tools if t.get("id")])
+            tool_names_to_save = current_tool_names
 
         conn.close()
 
