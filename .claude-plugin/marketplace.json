@@ -15,6 +15,12 @@
       "source": "./plugins/godot-dev",
       "description": "Godot 4.x debugging, GDScript patterns, project status (docs/STATUS.md), and bundled godot-mcp server",
       "version": "2.4.0"
+    },
+    {
+      "name": "yt-fetch",
+      "source": "./plugins/yt-fetch",
+      "description": "Fetch a YouTube video as readable markdown (title, channel, description, clean transcript) — for when WebFetch can't read YouTube.",
+      "version": "1.0.0"
     }
   ]
 }

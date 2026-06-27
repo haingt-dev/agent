@@ -1,0 +1,6 @@
+{
+  "name": "yt-fetch",
+  "description": "Fetch a YouTube video as readable markdown (title, channel, description, clean transcript) via a tested yt-dlp pipeline — for when WebFetch can't read YouTube.",
+  "version": "1.0.0",
+  "author": { "name": "Hai" }
+}
