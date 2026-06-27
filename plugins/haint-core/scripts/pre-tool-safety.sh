@@ -37,6 +37,16 @@ fi
 if echo "$COMMAND" | grep -qE 'git\s+clean\s+-[a-zA-Z]*f'; then
     emit "ask" "Dangerous: git clean -f (removes untracked files)"
 fi
+if echo "$COMMAND" | grep -qE 'git\s+branch\s+[^|;&]*(-[a-zA-Z]*D\b|--delete\s+--force|--force\s+--delete)'; then
+    emit "ask" "Dangerous: git branch -D (force-deletes a branch, bypasses merge check)"
+fi
+# Discard ALL working-tree changes via a bare '.' pathspec (checkout . / restore .)
+if echo "$COMMAND" | grep -qE 'git\s+checkout\s+(--\s+)?\.(\s|$)'; then
+    emit "ask" "Dangerous: git checkout . (discards all uncommitted changes)"
+fi
+if echo "$COMMAND" | grep -qE 'git\s+restore\s+([^|;&]*\s)?\.(\s|$)' && ! echo "$COMMAND" | grep -qE 'restore\s+--staged\s+\.(\s|$)'; then
+    emit "ask" "Dangerous: git restore . (discards all uncommitted changes)"
+fi
 
 # --- Sensitive file commits ---
 if echo "$COMMAND" | grep -qE 'git\s+(add|commit)'; then
