@@ -31,7 +31,10 @@ the player-experience intent.}
 | {…} | {…} | {…} |
 
 ## Open Questions
-- [ ] {unresolved decision}
+<!-- Single-source rule (see SKILL.md → Single-source backlogs): if a central
+     [[{PREFIX} - Open Questions]] note exists, this section is a POINTER, not a copy — list the
+     item IDs + a link, never re-type the question here (the two copies drift). -->
+*Single source → [[{PREFIX} - Open Questions]]. Items touching this system:* {Q3 · D1 · …}
 
 ## References
 - [[GDD - {Codename}]] — index

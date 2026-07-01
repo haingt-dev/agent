@@ -44,9 +44,30 @@ docs/gdd/
 - **Core is the stable anchor** (pillars → loops → progression). Keep it to a few small notes; it's
   the reference the rest of the design hangs off, not a dumping ground.
 
+### Single-source backlogs (Open Questions et al.)
+
+A cross-cutting backlog — the **Open Questions** note, or any register aggregating items owned by
+many notes — has **one canonical home**: each item's full text + status lives there under a
+**stable ID** (`Q3`, `D1`, `R2`…) that the rest of the vault references. Each owning note carries a
+**one-line pointer** back (the IDs that touch it + a link), **never a re-typed copy** — re-typing
+the item in both places is the trap: the two drift, and the reader can't tell which is current.
+*(A status legend + an at-a-glance table in the canonical note is the recommended trackability
+layer, but that format is project taste; the single-source rule is the law.)*
+
+**Shape the canonical note as a prioritized top-down work-queue** — the dev solves it from the top,
+one item at a time. Rank items **dependency-first, severity-second** (an upstream schema/economy node
+blocks the ones below it). Tag each with a **Mode** — 🔨 forge (a live design call) · ✍️ scribe (fix
+drift, no new thinking) · ⏸ plan/gate (not a design node) · 🧪 prototype (needs playtest data) — so
+the reader knows *how* each closes. Keep **Parked** (prototype-gated leans), **Deferred**
+(planning/gate), and **Resolved** (traceability) as sections *outside* the active queue. IDs may
+encode origin (`Q#` question · `D#` reef · `R#` risk · `G#` spec-gap · `C#` contradiction · `S#`
+status). **NB** these Mode/Status glyphs are local to the note — the index reuses 🔴/🟡/🟢 for
+section-completeness; don't conflate them.
+
 Templates (read them, fill literally — do not copy the Templater syntax):
 - Master index → [references/gdd-index-template.md](references/gdd-index-template.md)
 - Section note → [references/gdd-section-template.md](references/gdd-section-template.md)
+- Open Questions (work-queue) → [references/gdd-open-questions-template.md](references/gdd-open-questions-template.md)
 
 ## Procedure
 
